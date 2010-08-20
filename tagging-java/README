@@ -1,0 +1,18 @@
+README - Structured Prediction Cascades Java Toolkit - Sequential Prediction
+
+COMPILATION INSTRUCTIONS
+
+1. Download the two necessary dependencies: 
+
+	* GNU Trove 2.1.0 
+	  http://sourceforge.net/projects/trove4j/files/trove/trove-2.1.0/trove-2.1.0.tar.gz/download
+	
+	* ANTLR java binary runtimes 
+	  http://www.antlr.org/download.html
+	  
+2. Put the two .jar files into the "ext" folder, and rename the ANTLR jar to "antlr-runtime.jar".
+
+3. If you have ANT installed on your system, you are ready to go. 
+	Compile by running "ant" and run by running "ant POSTagger <args>".  
+
+
