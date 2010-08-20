@@ -10,9 +10,14 @@ COMPILATION INSTRUCTIONS
 	* ANTLR java binary runtimes 
 	  http://www.antlr.org/download.html
 	  
-2. Put the two .jar files into the "ext" folder, and rename the ANTLR jar to "antlr-runtime.jar".
+2. Put the two library .jar files into an "ext" folder, and rename the ANTLR jar to "antlr-runtime.jar".
 
 3. If you have ANT installed on your system, you are ready to go. 
 	Compile by running "ant" and run by running "ant POSTagger <args>".  
+	
+OR
+
+3. You can import this as a project into Eclipse directly, just so long as you create the "ext" directory
+	and put the appropriate libraries there.
 
 
