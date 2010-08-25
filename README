@@ -21,7 +21,7 @@ OR
 
 4. Run the program with the command:
 
-java -cp bin:ext/antlr-runtime.jar:ext/trove-2.1.0.jar cascade.programs.TrainTagger.java <args>
+java -cp bin:ext/antlr-runtime.jar:ext/trove-2.1.0.jar cascade.programs.TrainTagger <args>
 
 See the online documentation for information about command line and configuration for the training program
 at:

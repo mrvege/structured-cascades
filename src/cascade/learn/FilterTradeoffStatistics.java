@@ -96,7 +96,7 @@ public class FilterTradeoffStatistics {
 	
 	public String summarize() {
 		return String.format(
-						"Alpha: %.4f (max %.4f), Err: %.4f%% [+%.4f%%], ZErr: %.4f%% [+%.4f%%] (cap %.4f%%), Eff: %.4f%% (%.4f%% zero [-%.4f%%])",
+						"\n\tAlpha: %.4f (max %.4f), Err: %.4f%% [+%.4f%%], ZErr: %.4f%% [+%.4f%%] (cap %.4f%%), Eff: %.4f%% (%.4f%% zero [-%.4f%%])",
 						bestAlpha, alphaCap, bestErrUnderCap , baselineErr, bestZeroErrUnderCap, 
 						zeroBaselineErr, cap, bestEffUnderCap , bestZeroEffUnderCap, zeroBaselineEff);
 	}

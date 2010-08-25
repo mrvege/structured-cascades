@@ -68,7 +68,8 @@ cascade.programs.Options o {
 	/* force generation of 0-order lattices */
 	alwaysPrecomputeFirst = false;
 
-	/* use 20 epochs for training */
+	/* use 2 epochs for training (increase for increased
+	accuracy, but slower runtime) */
 	trainEpochs = 2;
 
 	/* set random set for reproducibility */

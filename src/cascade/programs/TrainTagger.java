@@ -79,7 +79,7 @@ public class TrainTagger {
 				options.println(1,"><><><><><><><><><><><><><><><><><><><><><><><><");
 				continue;
 			}			
-			for (int partition = 3; partition < partitions.length; partition++) {
+			for (int partition = 0; partition < partitions.length; partition++) {
 				ModelWeights w;
 				
 				if (!models[level].generateLatticesOnly)
@@ -392,7 +392,8 @@ public class TrainTagger {
 		
 		if (options.verbosity > 0) {
 			options.println(1,"** DEVEL SET Performance: (best epoch = " + bestEpoch + ")");
-			options.println(1,bestTradeoff.summarize() + bestGenstats.summarize());
+			options.println(1,"Trade-off Optimization:" + bestTradeoff.summarize());
+			options.println(1,"Best Epoch Peformance:" + bestGenstats.summarize());
 		}
 		
 		// save model weights
@@ -443,47 +444,7 @@ public class TrainTagger {
 			boolean [] mask = model.computeFilterMask(lattice, w.weights, w.alpha, isFutureTrainingSet);
 
 			Lattice newLattice = models[level+1].expandLattice(lattice, mask);
-
-			if (isFullPartition && level == 1) {
-				
-				for (int i = 0; i < 5; i++)
-					System.out.println(w.weights.score(lattice.fv[i]));
-			
-				System.out.println(((NOrderPOS)model).viterbi);
-				
-				//lattice.edgeScores = ArrayUtil.ensureCapacity(lattice.edgeScores, lattice.fv.length);
-				//model.scoreLatticeEdges(w, lattice);
-				((NOrderPOS)model).computeEdgeMarginals(lattice, w.weights);
-				
-				for (int i = 0; i < 5; i++)
-					System.out.println(lattice.edgeScores[i]);
-				for (int i = 0; i < 5; i++)
-					System.out.println(((NOrderPOS)model).marginalVals[i]);
-				for (int i = 0; i < 5; i++)
-					System.out.println(((NOrderPOS)model).alphaVals[i]);
-				for (int i = 0; i < 5; i++)
-					System.out.println(((NOrderPOS)model).betaVals[i]);
-								
-				
-				System.out.println(w.weights.hashCode());
-				System.out.println(lattice.maxEdgeScore);
-				System.out.println(lattice.meanEdgeScore);
-				
-				//System.out.println(models[level+1].featureAlphabet.toString());
-				System.out.println(w.weights.hashCode());
-				
-				model.addGeneralizationStats(lattice, w.weights, genstats, w.alpha);
-				genstats.average();
-				System.out.println(w.weights.w.length);				
-				System.out.println(genstats.summarize());
-				
-				for (int i = 0; i < 5; i++)
-					System.out.println(w.weights.score(lattice.fv[i]));
-				
-				//lattice.print();
-				System.exit(1);
-			}
-
+		
 			elapsed += System.nanoTime()-startTime;
 
 			corpus.saveLatticeToCache(newLattice);
@@ -511,12 +472,12 @@ public class TrainTagger {
 			options.print(2, String.format("looking for min with err cap: %g, maxalpha %g\n", model.maxerr, w.alpha));
 			tradeoff.findBestAlpha(model.maxerr, w.alpha);
 
-			options.println(0,tradeoff.summarize() + genstats.summarize());
+			options.println(0,genstats.summarize());
 
 			String logstr = w.epoch + ",-1,-1," + ArrayUtil.joinDoubleFields(genstats, GeneralizationStatistics.writeFields) + ","
 			+ ArrayUtil.joinDoubleFields(tradeoff, FilterTradeoffStatistics.writeFields);
-			SimpleLogger develLog = new SimpleLogger(corpus.getPartitionFilePrefix(partition, level) +  "-devel");
-			develLog.println(logstr);
+//			SimpleLogger develLog = new SimpleLogger(corpus.getPartitionFilePrefix(partition, level) +  "-devel");
+//			develLog.println(logstr);
 
 			
 			PrintWriter testout = new PrintWriter(corpus.getPartitionFilePrefix(partition, level) + "-test.txt");

@@ -65,7 +65,7 @@ public class Corpus {
 		
 	/** 
 	 * src is the <i>prefix</i> of the source files that we read in. The actual files should
-	 * be named <i>prefix</i>_train.sent and <i>prefix</i>prefix_test.conll 
+	 * be named <i>prefix</i>_train.txt and <i>prefix</i>prefix_test.txt 
 	 * and these are automatically appended to make the files we actually read. 
 	 */
 	public String src;
@@ -121,7 +121,7 @@ public class Corpus {
 	
 	/**
 	 * create train[] devel[] and test[] for the jack knife as well as a final one by reading the 
-	 * files at src+"_train.sent" and src+"_test.sent". 
+	 * files at src+"_train.txt" and src+"_test.txt". 
 	 * @param src the prefix of the source data location
 	 * @param prefix the prefix of the output data location
 	 * @throws IOException
@@ -142,7 +142,7 @@ public class Corpus {
 	public void init() throws IOException{
 		// FIXME: we're currently assuming that the input data file is randomly sorted -- right?
 		// maybe we should randomize its order to make the training work
-		Sequence[] fullTrain = readFile(src+"_train.sent", maxTrainingSize);
+		Sequence[] fullTrain = readFile(src+"_train.txt", maxTrainingSize);
 		// development is first numDevel sequences of fullTrain, for all partitions. 
 		int numDevel = (int)((fullTrain.length)*develFraction);
 		devel = new Sequence[numDevel];
@@ -170,7 +170,7 @@ public class Corpus {
 		}
 		
 		// create the final jack knife which has the full data
-		test[numJackKnives] = readFile(src+"_test.sent", maxTestingSize);
+		test[numJackKnives] = readFile(src+"_test.txt", maxTestingSize);
 		train[numJackKnives] = new Sequence[fullTrain.length];
 		int trainInd = 0;
 		for (int j = 0; j < tmp.length; j++) {

@@ -164,73 +164,25 @@ public class UseTrainedTagger {
 		Lattice[] lattices = new Lattice[models.length];
 
 		lattices[0] = models[0].createLattice(seq);
-	
+		lattices[0].stateScores = null;	
+		
 		// we did first model, and last model is actual predictor. 
 		for (int level = 0; level < models.length-1; level++) {
 
 			CascadeModel model = models[level];
 			Lattice lattice = lattices[level];
 			double a = alpha[level];
-			Weights w=  weights[level];
+			Weights w =  weights[level];
 
-//			System.out.println(model.featureAlphabet);
-//			System.out.println(model.featureGen);
-//	
-		if (level == 1) {
 
-				lattice.stateScores = null;
-				
-				System.out.println(weights[level].hashCode());
-
-				System.out.println(lattice.maxEdgeScore);
-				System.out.println(lattice.meanEdgeScore);
-				
-				genstats[level].average();
-				System.out.println(genstats[level].summarize());
-				//lattices[level-1].print();
-				System.out.println(weights[level-1].hashCode());
-				
-				//lattice.print();
-				
-				for (int i = 0; i < 5; i++)
-					System.out.println(w.score(lattice.fv[i]));
-			
-				System.out.println(((NOrderPOS)model).viterbi);
-				
-				//lattice.edgeScores = ArrayUtil.ensureCapacity(lattice.edgeScores, lattice.fv.length);
-				//model.scoreLatticeEdges(w, lattice);
-				((NOrderPOS)model).computeEdgeMarginals(lattice, w);
-				
-				for (int i = 0; i < 5; i++)
-					System.out.println(lattice.edgeScores[i]);
-				for (int i = 0; i < 5; i++)
-					System.out.println(((NOrderPOS)model).marginalVals[i]);
-				
-				for (int i = 0; i < 5; i++)
-					System.out.println(((NOrderPOS)model).alphaVals[i]);
-				for (int i = 0; i < 5; i++)
-					System.out.println(((NOrderPOS)model).betaVals[i]);
-	
-				
-				System.exit(1);
-			}
 
 			boolean [] mask = model.computeFilterMask(lattice, w, a, false);
 			
 			Lattice newLattice = models[level+1].expandLattice(lattice, mask);
 			lattices[level+1] = newLattice;
+			lattices[level+1].stateScores = null;
 			
 			model.addGeneralizationStats(lattice, w, genstats[level], a);
-
-			System.out.println(model.featureAlphabet.toString());//			
-				
-			//System.out.println(models[level].featureAlphabet.toString());
-			
-//			
-
-			
-//			lattices[level].print();
-			//System.exit(1);
 		}
 
 		// do the actual prediction...
