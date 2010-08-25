@@ -165,7 +165,9 @@ public class FeatureVector{ //implements Serializable {
 		for (int i = 0; i < keys.length; i++) {
 			String v = (i < vals.length ? " = " + vals[i] : "");
 			
-			sb.append(a.reverseLookup(keys[i])).append(v);
+			//sb.append(a.reverseLookup(keys[i])).append(v);
+			sb.append(keys[i]);
+			
 			if (i < (keys.length - 1))
 				sb.append(",");
 			

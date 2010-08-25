@@ -28,16 +28,22 @@ public class ViterbiMaxSum extends Viterbi {
 					int leftIdx = lattice.getLeftStateIdx(edgeIdx);
 
 					double val = lattice.edgeScores[edgeIdx];
+					//System.out.printf("%d: val = %g\n", idx, val);
+
 					if (lattice.stateScores != null)
 						val += lattice.stateScores[idx];					
 
+					//System.out.printf("%d: val = %g\n", idx, val);
 					// if not the start state, accumulate value in alpha table
 					if (leftIdx != Lattice.NULL_IDX)
 						val += alphaVals[leftIdx];
 					
+					//System.out.printf("%d: val = %g\n", idx, val);
 					if (val > max) {
 						argmax = edgeIdx;
 						max = val;
+						
+						//System.out.printf("%d: maxval = %g\n", idx, max);
 					}					
 					
 				}

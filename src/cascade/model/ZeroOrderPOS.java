@@ -52,8 +52,7 @@ public class ZeroOrderPOS extends ZeroOrderModel implements Externalizable {
 	public boolean useCoarseTags = false;
 
 	public Alphabet POSAlphabet;
-	public FeatureGenerator featureGen;
-	
+
 	// temporary buffers to avoid re-allocation:
 	double [] scores = null; // scores / marginals buffer
 	boolean [] mask = null;
@@ -270,6 +269,11 @@ public class ZeroOrderPOS extends ZeroOrderModel implements Externalizable {
 			}
 		}
 
+//		if (!isTraining) {
+//			System.out.println("Mean: " + Arrays.toString(mean));
+//			System.out.println("Max: " + Arrays.toString(max));
+//			((ZeroOrderLattice)lattice).print(mask);
+//		}
 		return mask;
 	}
 	

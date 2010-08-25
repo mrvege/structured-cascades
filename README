@@ -12,12 +12,19 @@ COMPILATION INSTRUCTIONS
 	  
 2. Put the two library .jar files into an "ext" folder, and rename the ANTLR jar to "antlr-runtime.jar".
 
-3. If you have ANT installed on your system, you are ready to go. 
-	Compile by running "ant" and run by running "ant POSTagger <args>".  
+3. Make sure you have Apache Ant installed on your system. Then you can compile simply by running "ant".
 	
 OR
 
 3. You can import this as a project into Eclipse directly, just so long as you create the "ext" directory
 	and put the appropriate libraries there.
 
+4. Run the program with the command:
+
+java -cp bin:ext/antlr-runtime.jar:ext/trove-2.1.0.jar cascade.programs.TrainTagger.java <args>
+
+See the online documentation for information about command line and configuration for the training program
+at:
+
+http://code.google.com/structured-cascades/
 

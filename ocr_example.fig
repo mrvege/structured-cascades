@@ -48,10 +48,10 @@ cascade.programs.Options o {
 	/* set a Corpus object to define dataset settings */
 	corpus = cascade.io.Corpus c {
 
-	        /* Location of the data files
+	    /* Location of the data files */
 		src = "data/ocr_";
 
-		/* Location where output should be saved
+		/* Location where output should be saved */
 		prefix = "out-";
 
 		/* use 3 partitions for jacknifing */
@@ -66,10 +66,10 @@ cascade.programs.Options o {
 	};
 
 	/* force generation of 0-order lattices */
-	alwaysPrecomputeFirst = true;
+	alwaysPrecomputeFirst = false;
 
 	/* use 20 epochs for training */
-	trainEpochs = 20;
+	trainEpochs = 2;
 
 	/* set random set for reproducibility */
 	seed = 12345;

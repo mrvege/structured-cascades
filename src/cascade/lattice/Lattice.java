@@ -838,7 +838,7 @@ public class Lattice {
 
 			if (model != null && fv != null && fv.length == length) {
 				System.out.println("\t" + fv[pos].getKeys().length + " Position Features:" + fv[pos].toString(model.featureAlphabet));
-			}
+			} 
 			
 			int start = getStateOffset(pos);
 			int end = getStateOffset(pos + 1);
@@ -901,8 +901,13 @@ public class Lattice {
 		System.out.println("edge dump:");
 		for (int pos = 0; pos <= length; pos++) {
 			for (int edgeIdx = getEdgeOffset(pos); edgeIdx < getEdgeOffset(pos+1); edgeIdx++) {
-				System.out.printf("pos %d: [%d] (%d,%d)\n", pos, edgeIdx,
+				System.out.printf("pos %d: [%d] (%d,%d)", pos, edgeIdx,
 						getLeftStateIdx(edgeIdx), getRightStateIdx(edgeIdx));
+				
+				if (edgeScores != null)
+					System.out.printf(" score=%g", edgeScores[edgeIdx]);
+				
+				System.out.println();
 			}
 		}
 

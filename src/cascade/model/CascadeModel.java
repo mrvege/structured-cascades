@@ -179,6 +179,8 @@ public abstract class CascadeModel  {
 
 	public abstract void addTradeoffStats(Lattice lattice, Weights w, FilterTradeoffStatistics stats);
 
+	
+	
 	/**
 	 * Computes the test set generalization performance of the model on the given lattice and 
 	 * adds the statistics to a running tally stored in stats.

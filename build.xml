@@ -44,4 +44,15 @@
             <classpath refid="pub-cascade.classpath"/>
         </java>
     </target>
+    <target name="UseTrainedTagger">
+        <java classname="cascade.programs.UseTrainedTagger" failonerror="true" fork="yes">
+            <classpath refid="pub-cascade.classpath"/>
+        </java>
+    </target>
+    <target name="Inspector">
+        <java classname="cascade.programs.Inspector" failonerror="true" fork="yes">
+            <classpath refid="pub-cascade.classpath"/>
+        </java>
+    </target>
+
 </project>

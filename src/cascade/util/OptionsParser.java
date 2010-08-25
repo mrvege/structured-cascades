@@ -99,15 +99,13 @@ public class OptionsParser {
 				models[i] = (CascadeModel) ObjectReader.readOneObject(filename, true);
 
 				System.out.println(models[i]);
-				
 				// set to use whatever the Fig says as the update rule and featureGen 
-
-				System.out.println("Overriding featureGen and UpdateRule");
 				CascadeModel mFromFile = ((CascadeModel)optslist.get(i+1));
 				models[i].update = mFromFile.update;
 				if (mFromFile.featureGen != null) {
 					models[i].featureGen = mFromFile.featureGen;
 					models[i].featureGen.init(options);
+					models[i].featureGen.setWorkingAlphabet(models[i].featureAlphabet);
 				}
 				models[i].generateLatticesOnly = mFromFile.generateLatticesOnly;
 				models[i].trainingAlphas = mFromFile.trainingAlphas;

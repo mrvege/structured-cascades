@@ -49,7 +49,8 @@ public class OCRFeatures extends FeatureGenerator {
 		for (int i = 2; i < word.length; i++) {
 			add(sb.append("p" + i + "=" + word[i]).toString());
 			sb.delete(start, sb.length());
-		}		
+		}
+		
 	}
 
 

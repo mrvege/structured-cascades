@@ -1,6 +1,8 @@
 package cascade.features;
 
 import java.io.Serializable;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 
 /**
@@ -8,14 +10,14 @@ import java.util.Arrays;
  * compute dot products with sparse feature vectors (possibly with weight
  * mixing) and vector addition.
  *
- * Use @{AveragingWeights} or @{ScalableWeights} instead.
+ * Use {@link cascade.features.AveragingWeights} or{@link cascade.features.ScalableWeights} instead.
  */
 public class Weights implements Serializable {
 	
 	/**
 	 * 
 	 */
-	private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 2L;
 	
 	/**
 	 * All weights have a dense vector, regardless of representation. 
@@ -41,6 +43,15 @@ public class Weights implements Serializable {
 			sum += v*v;
 		
 		return Math.sqrt(sum);
+	}
+	
+	@Override
+	public String toString() {
+		return "Weights [w=" + Arrays.toString(w) + "]";
+	}
+	
+	public int hashCode() {
+		return Arrays.hashCode(w);
 	}
 	
 

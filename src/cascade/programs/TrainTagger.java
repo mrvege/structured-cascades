@@ -7,6 +7,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.PrintWriter;
 import java.util.Arrays;
 
 import cascade.features.AveragingWeights;
@@ -18,6 +19,7 @@ import cascade.lattice.Lattice;
 import cascade.learn.FilterTradeoffStatistics;
 import cascade.learn.GeneralizationStatistics;
 import cascade.model.CascadeModel;
+import cascade.model.NOrderPOS;
 import cascade.util.ArrayUtil;
 import cascade.util.OptionsParser;
 import cascade.util.RunTimeEstimator;
@@ -30,7 +32,7 @@ import cascade.util.RunTimeEstimator;
  *
  * See README information about the output that this program creates.
  */
-public class POSTagger {
+public class TrainTagger {
 
 	static class ModelWeights{
 		public ModelWeights(double bestalpha, Weights bestw, int epoch) {
@@ -77,7 +79,7 @@ public class POSTagger {
 				options.println(1,"><><><><><><><><><><><><><><><><><><><><><><><><");
 				continue;
 			}			
-			for (int partition = 0; partition < partitions.length; partition++) {
+			for (int partition = 3; partition < partitions.length; partition++) {
 				ModelWeights w;
 				
 				if (!models[level].generateLatticesOnly)
@@ -249,6 +251,10 @@ public class POSTagger {
 		String logstr = bestEpoch + ",-1,-1," + ArrayUtil.joinDoubleFields(genstats, GeneralizationStatistics.writeFields);
 		trainingProgress.println(logstr);
 
+		PrintWriter testout = new PrintWriter(corpus.getPartitionFilePrefix(partition, level) + "-test.txt");
+		testout.println(genstats.summarize());
+		testout.close();		
+		
 	}
 	//.for (int t = 0; t < 30; t++) {
 
@@ -438,6 +444,46 @@ public class POSTagger {
 
 			Lattice newLattice = models[level+1].expandLattice(lattice, mask);
 
+			if (isFullPartition && level == 1) {
+				
+				for (int i = 0; i < 5; i++)
+					System.out.println(w.weights.score(lattice.fv[i]));
+			
+				System.out.println(((NOrderPOS)model).viterbi);
+				
+				//lattice.edgeScores = ArrayUtil.ensureCapacity(lattice.edgeScores, lattice.fv.length);
+				//model.scoreLatticeEdges(w, lattice);
+				((NOrderPOS)model).computeEdgeMarginals(lattice, w.weights);
+				
+				for (int i = 0; i < 5; i++)
+					System.out.println(lattice.edgeScores[i]);
+				for (int i = 0; i < 5; i++)
+					System.out.println(((NOrderPOS)model).marginalVals[i]);
+				for (int i = 0; i < 5; i++)
+					System.out.println(((NOrderPOS)model).alphaVals[i]);
+				for (int i = 0; i < 5; i++)
+					System.out.println(((NOrderPOS)model).betaVals[i]);
+								
+				
+				System.out.println(w.weights.hashCode());
+				System.out.println(lattice.maxEdgeScore);
+				System.out.println(lattice.meanEdgeScore);
+				
+				//System.out.println(models[level+1].featureAlphabet.toString());
+				System.out.println(w.weights.hashCode());
+				
+				model.addGeneralizationStats(lattice, w.weights, genstats, w.alpha);
+				genstats.average();
+				System.out.println(w.weights.w.length);				
+				System.out.println(genstats.summarize());
+				
+				for (int i = 0; i < 5; i++)
+					System.out.println(w.weights.score(lattice.fv[i]));
+				
+				//lattice.print();
+				System.exit(1);
+			}
+
 			elapsed += System.nanoTime()-startTime;
 
 			corpus.saveLatticeToCache(newLattice);
@@ -472,6 +518,12 @@ public class POSTagger {
 			SimpleLogger develLog = new SimpleLogger(corpus.getPartitionFilePrefix(partition, level) +  "-devel");
 			develLog.println(logstr);
 
+			
+			PrintWriter testout = new PrintWriter(corpus.getPartitionFilePrefix(partition, level) + "-test.txt");
+			testout.println("Level " + level + " TEST Performance:");
+			testout.println(genstats.summarize());
+			testout.close();
+			
 			// by assumption, the very last partition generates features for the development set  
 			corpus.switchToDevel(partition, level);
 			corpus.openNewLatticeCache(partition, level+1);

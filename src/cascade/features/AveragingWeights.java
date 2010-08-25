@@ -1,5 +1,8 @@
 package cascade.features;
 
+import java.io.Serializable;
+import java.util.Arrays;
+
 /**
  * 
  * An extension to the basic {@link cascade.features.Weights Weights} class that adds the capability to keep track of a running average
@@ -7,9 +10,22 @@ package cascade.features;
  * 
  * 
  */
-public class AveragingWeights extends Weights {
+public class AveragingWeights extends Weights implements Serializable {
 
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 2L;
+	
 	private double wupdates[];
+	
+	@Override
+	public String toString() {
+		return "AveragingWeights [averaged=" + averaged + ", scale=" + scale
+				+ ", t=" + t + ", wupdates=" + Arrays.toString(wupdates)
+				+ ", w=" + Arrays.toString(w) + "]";
+	}
+
 	private double scale;
 	private int t;
 	private boolean averaged;

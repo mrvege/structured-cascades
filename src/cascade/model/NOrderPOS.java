@@ -81,7 +81,7 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 	 * Whether or not to use the mean-max threshold or plug in alpha itself as the threshold 
 	 * (if using sum-product marginals).
 	 */
-	public boolean useAlphaAsThreshold;
+	public boolean useAlphaAsThreshold = false;
 
 	
 	/**
@@ -829,7 +829,7 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 		return order + " Order POS Model: " + POSAlphabet.size() + 
 		" tags, " + getNumberOfFeatures() + 
 		" features " + (usePositionFeatures ? ("," + pow(order+1) + " grams, " + featureAlphabet.size() + " positional features (" + 
-		pow(order+1)*featureAlphabet.size() + " possible)") : "");
+		pow(order+1)*featureAlphabet.size() + " possible)") : "") + " ";
 	}
 
 }

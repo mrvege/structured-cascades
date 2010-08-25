@@ -119,7 +119,7 @@ public class ZeroOrderLattice extends Lattice {
 
 			for (int idx = start; idx < end; idx++) {
 //				if (model == null) {
-//					System.out.printf("[%d]: state %d\n", idx, getStateID(idx));
+					//System.out.printf("[%d]: state %d\n", idx, getStateID(idx));
 //				} else {
 //					
 				if(mask[idx])
@@ -144,6 +144,11 @@ public class ZeroOrderLattice extends Lattice {
 
 		for (int pos = 0; pos < length; pos++) {
 
+			if (fv != null && fv.length == length) {
+				System.out.printf("Features at position %d:\n", pos);
+				System.out.println("\t" + fv[pos].toString(model.featureAlphabet));
+			}
+
 			System.out.printf("States at position %d:\n", pos);
 
 			int start = getStateOffset(pos);
@@ -155,9 +160,13 @@ public class ZeroOrderLattice extends Lattice {
 					System.out.printf("[%d]: state %d\n", idx, getStateID(idx));
 				} else {
 					
-					System.out.printf("[%d]: state %s\n", idx, model.stateToString(this, getStateID(idx)));
+					System.out.printf("[%d]: state %s", idx, model.stateToString(this, getStateID(idx)));
+					if (stateScores != null)
+						System.out.printf(" score=%g ", stateScores[idx]);
 					if (fv != null && fv.length == getNumStates()) 
-						System.out.println("Features: " + fv[idx].toString(model.featureAlphabet));
+						System.out.print("\nFeatures: " + fv[idx].toString(model.featureAlphabet));
+					
+					System.out.println();
 				}
 
 			}
