@@ -81,8 +81,8 @@ public class OptionsParser {
 				else if (!t & trained) throw new RuntimeException("Cannot train only the first part of a cascade");
 		}
 		
+		Corpus.options = options;		
 		corpus.init();
-		Corpus.options = options;
 
 		System.out.println("Training models: " + Arrays.toString(trainModel));
 		

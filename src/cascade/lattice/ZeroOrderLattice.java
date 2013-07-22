@@ -1,5 +1,7 @@
 package cascade.lattice;
 
+import gnu.trove.TIntArrayList;
+
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
@@ -21,9 +23,14 @@ public class ZeroOrderLattice extends Lattice {
 	/**
 	 * 
 	 */
-	private static final long serialVersionUID = 2L;
+	private static final long serialVersionUID = 4L;
 	public static final long classID = 1;
-	
+
+	/**
+	 * Whether or not the actual state IDs are stored (they aren't strictly necessary)
+	 */
+	public boolean storeStateIDs = true;
+	private int _nstates;
 	
 	public ZeroOrderLattice(DataInput in) throws IOException {
 
@@ -31,23 +38,26 @@ public class ZeroOrderLattice extends Lattice {
 		if (id!= serialVersionUID) throw new IOException("Wrong serial version, got "+id);
 		seqHash = in.readInt();
 		length = in.readInt();
+		_nstates = in.readInt();
+		storeStateIDs = in.readBoolean();
 		
 		statePosOffsets = ArrayUtil.readIntArray(in);
-		stateIDs = ArrayUtil.readIntArray(in);
+		if (storeStateIDs)
+			stateIDs = ArrayUtil.readIntArray(in);
 		fv = ArrayUtil.readFeatureVectorArray(in);
+		fvPos = ArrayUtil.readFeatureVectorArray(in);
+		fvState = ArrayUtil.readFeatureVectorArray(in);
 		
 		// scores are never saved
 		stateScores = null;
 		edgeScores = null;
 	}
 	
-	/**
-	 * Builds a zero order lattice for a given sequence (i.e. no edges)
-	 * 
-	 * @param seq
-	 * @param model
-	 */
-	public ZeroOrderLattice(Sequence seq, ZeroOrderModel m){
+	public ZeroOrderLattice(Sequence seq, ZeroOrderModel m) {
+		this(seq, m, false);
+	}
+	
+	public ZeroOrderLattice(Sequence seq, ZeroOrderModel m, boolean [][] mask) {
 		super(seq, m);
 		
 		length = seq.length();
@@ -59,36 +69,107 @@ public class ZeroOrderLattice extends Lattice {
 		rightEdgeIdx = null;
 		edgeLeftStates = null;
 		edgeRightStates = null;
-				
-		for (int pos = 0; pos < length; pos++) {
-			statePosOffsets[pos+1] = statePosOffsets[pos]+m.getNumberOfStates(seq, pos);
-		}
-		
-		// FIXME: the part below was commented out.  Why? 
-		// I uncommented it and brought it up to date, because otherwise
-		// decoding didn't work -- Kuzman
-		stateIDs = new int[statePosOffsets[length]];
 
-		int idx = 0;
+		// we WILL be storing state IDs
+		storeStateIDs = true;
+		
+		TIntArrayList newStateIDs = new TIntArrayList();
+
 		for (int pos = 0; pos < length; pos++) {
 			int[] states = m.possibleStates(seq, pos);
 			for (int s = 0; s < states.length; s++)
-				stateIDs[idx++] = states[s];
+				if (mask[pos][s]) 
+					newStateIDs.add(s);
+			
+			statePosOffsets[pos+1] = newStateIDs.size();
 		}
 		
+		stateIDs = newStateIDs.toNativeArray();
+	}
+
+	/**
+	 * Builds a zero order lattice for a given sequence (i.e. no edges)
+	 * 
+	 * @param seq
+	 * @param model
+	 */
+	public ZeroOrderLattice(Sequence seq, ZeroOrderModel m, boolean storeIDs){
+		super(seq, m);
+		
+		length = seq.length();
+		
+		statePosOffsets = new int[length + 1];
+		edgePosOffsets = new int[length + 2]; // all edges offsets are zero because there are no edges
+		
+		leftEdgeIdx = null;
+		rightEdgeIdx = null;
+		edgeLeftStates = null;
+		edgeRightStates = null;
+
+		storeStateIDs = storeIDs;
+	
+		if (storeStateIDs) {
+
+			// store only VALID states at each position
+			TIntArrayList newStateIDs = new TIntArrayList();
+			for (int pos = 0; pos < length; pos++) {
+				int[] states = m.possibleStates(seq, pos);
+				
+				newStateIDs.add(states);
+				statePosOffsets[pos+1] = newStateIDs.size();
+			}
+			
+			stateIDs = newStateIDs.toNativeArray();
+			
+		} else {
+			// # of states shoudl NOT change for a given position
+			_nstates = m.getNumberOfStates(seq, 0);
+			for (int pos = 0; pos < length; pos++) {
+				statePosOffsets[pos+1] = statePosOffsets[pos]+_nstates;
+			}
+
+			stateIDs = null;
+		}
 		
 	}	
 	
+	@Override
+	public int getStateID(int idx) {
+		
+		if (storeStateIDs)
+			return stateIDs[idx];
+		else
+			return idx - ((idx/_nstates)*_nstates);
+	}
+
+	@Override
+	public int[] getArgmaxStates(int[] alphaArgs, double[] edgeMarginalVals) {
+		// TODO Auto-generated method stub
+		return super.getArgmaxStates(alphaArgs, edgeMarginalVals);
+	}
+
+	@Override
+	public int findStatePosOffset(int idx) {
+		// TODO Auto-generated method stub
+		return super.findStatePosOffset(idx);
+	}
+
 	@Override
 	public void write(DataOutput out) throws IOException {
 		out.writeLong(classID);
 		out.writeLong(serialVersionUID);
 		out.writeInt(seqHash);
 		out.writeInt(length);
+		out.writeInt(_nstates);
+		out.writeBoolean(storeStateIDs);
 
 		ArrayUtil.writeIntArray(out, statePosOffsets);
-		ArrayUtil.writeIntArray(out, stateIDs);
+		if (storeStateIDs)
+			ArrayUtil.writeIntArray(out, stateIDs);
+		
 		ArrayUtil.writeFeatureVectorArray(out,fv);
+		ArrayUtil.writeFeatureVectorArray(out,fvPos);
+		ArrayUtil.writeFeatureVectorArray(out,fvState);
 	}
 	
 	public String fv2string(){

@@ -9,6 +9,7 @@ import java.util.Arrays;
 import gnu.trove.TDoubleArrayList;
 import gnu.trove.TIntArrayList;
 import cascade.features.FeatureVector;
+import cascade.features.Weights;
 import cascade.io.Sequence;
 import cascade.model.CascadeModel;
 import cascade.model.NOrderPOS;
@@ -34,7 +35,7 @@ public class Lattice {
 	/**
 	 * 
 	 */
-	protected static final long serialVersionUID = 1L;
+	protected static final long serialVersionUID = 2L;
 	protected static final long classID = 0;
 	
 	public static final int NULL_IDX = -1;
@@ -88,6 +89,10 @@ public class Lattice {
 	 */
 	public FeatureVector [] fv = null;
 	
+	public FeatureVector [] fvPos = null;
+	public FeatureVector [] fvState = null;
+	public FeatureVector [] fvEdge = null;
+	
 	// scores
 	public double [] stateScores = null;
 	public double [] edgeScores = null;
@@ -104,6 +109,7 @@ public class Lattice {
 		this.seq = seq;
 		this.seqHash = seq.hashCode();
 		this.model = m;
+		this.length = seq.length();
 	}
 	
 	/**
@@ -134,54 +140,54 @@ public class Lattice {
 	 * 	 
 	 * @deprecated
 	 */
-	private Lattice(NOrderPOS m, int length) {
-		this.length = length;
-
-		statePosOffsets = new int[length + 1];
-		edgePosOffsets = new int[length + 2];
-
-		leftEdgeIdx = new int[length][][];
-		rightEdgeIdx = new int[length][][];
-
-		// ------------------------------------------------------
-		// pass 1: compute the valid states (any NON NULL state)
-
-		TIntArrayList newStateIDs = new TIntArrayList();
-
-		int numPossibleStates = m.numPossibleStates();
-
-		int nulltagID = m.getPOSAlphabet().lookupIndex(NOrderPOS.NULLTAG);
-		
-		// starting states
-		for (int s : m.getStartStates()) {
-			if (m.computeTagFromNGramID(this, m.order, s,0) != nulltagID)
-				newStateIDs.add(s);
-		}
-		
-		statePosOffsets[1] = newStateIDs.size();
-
-		// adds all states that don't have [NULLTAG] at position 0
-		for (int pos = 1; pos < length; pos++) {
-
-			for (int s = 0; s < numPossibleStates; s++) {
-				if (m.computeTagFromNGramID(this, m.order, s,0) != nulltagID)
-					newStateIDs.add(s);
-			}
-
-			statePosOffsets[pos + 1] = newStateIDs.size();
-		}
-
-		stateIDs = newStateIDs.toNativeArray();
-
-		// trim states that might have [NULLTAG]'s in them, just not at offset 0, and 
-		// so can't be reached (the first few positions will have [NULLTAG] but can be reached) 
-		checkForUnreachableStates(m);
-
-		// ------------------------------------------------------
-		// pass 2: compute the valid edges
-		// if (m.getOrder() > 0)
-		computeValidEdges(m);
-	}
+//	private Lattice(NOrderPOS m, int length) {
+//		this.length = length;
+//
+//		statePosOffsets = new int[length + 1];
+//		edgePosOffsets = new int[length + 2];
+//
+//		leftEdgeIdx = new int[length][][];
+//		rightEdgeIdx = new int[length][][];
+//
+//		// ------------------------------------------------------
+//		// pass 1: compute the valid states (any NON NULL state)
+//
+//		TIntArrayList newStateIDs = new TIntArrayList();
+//
+//		int numPossibleStates = (int)m.numPossibleStates();
+//
+//		int nulltagID = m.getPOSAlphabet().lookupIndex(NOrderPOS.NULLTAG);
+//		
+//		// starting states
+//		for (int s : m.getStartStates()) {
+//			if (m.computeTagFromNGramID(this, m.order, s,0) != nulltagID)
+//				newStateIDs.add(s);
+//		}
+//		
+//		statePosOffsets[1] = newStateIDs.size();
+//
+//		// adds all states that don't have [NULLTAG] at position 0
+//		for (int pos = 1; pos < length; pos++) {
+//
+//			for (int s = 0; s < numPossibleStates; s++) {
+//				if (m.computeTagFromNGramID(this, m.order, s,0) != nulltagID)
+//					newStateIDs.add(s);
+//			}
+//
+//			statePosOffsets[pos + 1] = newStateIDs.size();
+//		}
+//
+//		stateIDs = newStateIDs.toNativeArray();
+//
+//		// trim states that might have [NULLTAG]'s in them, just not at offset 0, and 
+//		// so can't be reached (the first few positions will have [NULLTAG] but can be reached) 
+//		checkForUnreachableStates(m);
+//
+//		// ------------------------------------------------------
+//		// pass 2: compute the valid edges
+//		// if (m.getOrder() > 0)
+//		computeValidEdges(m);
+//	}
 
 	/**
 	 * Builds a new sparse Latitice from an existing one, according to the states generated
@@ -215,20 +221,40 @@ public class Lattice {
 		// dump stack of stateIDs / scores to native array
 		stateIDs = newStateIDs.toNativeArray();
 		stateScores = newStateScores.toNativeArray();
+
+		// ----------------------------------------------------------------------
+		// Pass 2: check for unreachable states (
+		int nstates = stateIDs.length;
+		int numUnreachable = checkForUnreachableStates(m, false);
+
+		if (numUnreachable == nstates) {
+			System.out.println("WARNING: ALL STATES ARE UNREACHABLE");
+		} else
+			 numUnreachable = checkForUnreachableStates(m, true);
 		
+		if (stateIDs.length == 0) {
+			throw new RuntimeException("LATTICE IS EMPTY FOR SOME REASON!!!");
+		}
+//		if (numUnreachable > 0) {
+//			System.err.println("warning: sequence " + seq.id + " hash " + seqHash + " has " + numUnreachable + " unreachable states");
+//		}
 		// ----------------------------------------------------------------------
 		// Pass 3: compute valid edges between states
 		computeValidEdges(m);	
 		
-		// ----------------------------------------------------------------------
-		// Pass 2: check for unreachable states (fail if found)
-		checkForUnreachableStates(m);		
-		
+		numUnreachable = checkForUnreachableStates(m, false);
+
+		if (numUnreachable > 0) {
+			System.err.println("VERY BAD WARNING!!: sequence " + seq.id + " hash " + seqHash + " STILL HAS " + numUnreachable + " unreachable states");
+		}
+
 		if (statePosOffsets[length] == 0) {
 			base.printEdgeMask(mask);
 			//FIXME does not give any information
 			throw new RuntimeException("Lattice is broken, cannot proceed");
 		}
+		
+
 	}
 
 	/**
@@ -249,7 +275,13 @@ public class Lattice {
         edgePosOffsets = ArrayUtil.readIntArray(in);
         edgeLeftStates = ArrayUtil.readIntArray(in);
         edgeRightStates = ArrayUtil.readIntArray(in);
+        
+        
         fv = ArrayUtil.readFeatureVectorArray(in);
+        fvPos = ArrayUtil.readFeatureVectorArray(in);
+        fvState = ArrayUtil.readFeatureVectorArray(in);
+        fvEdge = ArrayUtil.readFeatureVectorArray(in);
+        
 		// scores are never saved
 		stateScores = null;
 		edgeScores = null;
@@ -259,22 +291,26 @@ public class Lattice {
 	/**
 	 * Somewhat inefficienctly, check for unreachable states and mark them 
 	 */
-	protected void checkForUnreachableStates(CascadeModel m) {
+	protected int checkForUnreachableStates(CascadeModel m, boolean overwrite) {
 			
 		// compute which states are actually reachable
 		boolean [] reachableLeft = computeReachableForward(m);
 		boolean [] reachableRight = computeReachableBackward(m);
 		
 		// now build up a new list of state IDs
-//		TIntArrayList reachableStateIDs = new TIntArrayList(stateIDs.length);
-//		TDoubleArrayList reachableStateScores = new TDoubleArrayList(stateIDs.length);
-//		
-//		int [] reachablePosOffsets = new int[statePosOffsets.length];
+		TIntArrayList reachableStateIDs = new TIntArrayList(stateIDs.length);
+		TDoubleArrayList reachableStateScores = new TDoubleArrayList(stateIDs.length);
+		int [] reachablePosOffsets = new int[statePosOffsets.length];
+		
+		// XXX wtf is this???
 		if (!reachableLeft[0] || !reachableRight[0]){
-		System.out.print("");
-		reachableLeft = computeReachableForward(m);
-		reachableRight = computeReachableBackward(m);
+			System.out.print("");
+			reachableLeft = computeReachableForward(m);
+			reachableRight = computeReachableBackward(m);
 		}
+		
+		int num = 0;
+		
 		// loop through each position's valid EDGES or STATES (order 0) in the BASE matrix
 		for (int pos = 0; pos < length; pos++) {
 			
@@ -282,23 +318,32 @@ public class Lattice {
 			int end = statePosOffsets[pos + 1];
 			
 			for (int idx = start; idx < end; idx++) {
-				
-				if (!reachableLeft[idx] || !reachableRight[idx]) {
-					print();
-					throw new RuntimeException("Position " + pos + " state " + idx + " = Unreachable state detected!");
+	
+//				if (!reachableLeft[idx] || !reachableRight[idx]) {
+//					print();
+//					throw new RuntimeException("Position " + pos + " state " + idx + " = Unreachable state detected!");
 
-//					reachableStateIDs.add(stateIDs[idx]);
-//					reachableStateScores.add(stateIDs[idx]);
-				}
+//				}
+				if (reachableLeft[idx] && reachableRight[idx]) {
+					reachableStateIDs.add(stateIDs[idx]);
+					reachableStateScores.add(stateIDs[idx]);
+				} else
+					num++;
 			}
 			
-//			reachablePosOffsets[pos + 1] = reachableStateIDs.size();
+			reachablePosOffsets[pos + 1] = reachableStateIDs.size();
 		}
 		
-//		stateIDs = reachableStateIDs.toNativeArray();
-//		stateScores = reachableStateScores.toNativeArray();
-//		
-//		statePosOffsets = reachablePosOffsets;
+//		if (num == stateIDs.length) 
+//			throw new RuntimeException("WARNING: ALL STATES ARE UNREACHABLE CANNOT PROCEED");
+
+		if (num > 0 && overwrite) {
+			stateIDs = reachableStateIDs.toNativeArray();
+			stateScores = reachableStateScores.toNativeArray();		
+			statePosOffsets = reachablePosOffsets;
+		}
+
+		return num;
 	}
 
 	protected boolean[] computeReachableForward(CascadeModel m) {
@@ -387,9 +432,9 @@ public class Lattice {
 				}
 			}
 			  
-			if (!anyReachable) {
-				throw new RuntimeException("lattice (seq " + seq.id + " hash " + seqHash + " broken at position " + pos);
-			}
+//			if (!anyReachable) {
+//				throw new RuntimeException("lattice (seq " + seq.id + " hash " + seqHash + " broken at position " + pos);
+//			}
 		}
 		
 		return reachable;
@@ -402,7 +447,7 @@ public class Lattice {
 	 * 
 	 * @param m
 	 */
-	protected void computeValidEdges(CascadeModel m) {
+	public void computeValidEdges(CascadeModel m) {
 
 		TIntArrayList newEdgeLeftStates = new TIntArrayList();
 		TIntArrayList newEdgeRightStates = new TIntArrayList();
@@ -634,7 +679,7 @@ public class Lattice {
 	public int findStateIdx(int pos, int state) {
 
 		for (int idx = statePosOffsets[pos]; idx < statePosOffsets[pos + 1]; idx++)
-			if (stateIDs[idx] == state)
+			if (getStateID(idx) == state)
 				return idx;
 
 		return NULL_IDX;
@@ -832,6 +877,9 @@ public class Lattice {
 		System.out
 				.printf("Edge offsets: %s\n", Arrays.toString(edgePosOffsets));
 
+		if (seq != null)
+			seq.print();
+		
 		for (int pos = 0; pos < length; pos++) {
 
 			System.out.printf("States at position %d:\n", pos);
@@ -839,7 +887,11 @@ public class Lattice {
 			if (model != null && fv != null && fv.length == length) {
 				System.out.println("\t" + fv[pos].getKeys().length + " Position Features:" + fv[pos].toString(model.featureAlphabet));
 			} 
-			
+
+			if (model != null && fvPos != null) {
+				System.out.println("\t" + fvPos[pos].getKeys().length + " Position Features:" + fvPos[pos].toString(model.featureAlphabet));
+			} 
+
 			int start = getStateOffset(pos);
 			int end = getStateOffset(pos + 1);
 
@@ -867,8 +919,11 @@ public class Lattice {
 					if (fv != null && fv.length == getNumStates()) 
 						System.out.println("Features: " + fv[idx].toString(model.featureAlphabet));
 					
-						for (int edgeIdx : getLeftEdges(pos, idx - start)) {
-						
+					if (fvState != null) 
+						System.out.println("fvState Features: " + fvState[idx].toString(model.featureAlphabet));
+					
+					for (int edgeIdx : getLeftEdges(pos, idx - start)) {
+							
 						int leftIdx = getLeftStateIdx(edgeIdx);
 						int rightIdx = getRightStateIdx(edgeIdx);
 						String leftState = (leftIdx != -1) ? model.stateToString(this, getStateID(leftIdx)) : "-1";
@@ -877,6 +932,9 @@ public class Lattice {
 
 						if (fv != null && fv.length == getNumEdges()) 
 							System.out.println("\t Features: " + fv[edgeIdx].toString(model.featureAlphabet));
+						
+						if (fvEdge != null) 
+							System.out.println("\t fvEdge Features: " + fvEdge[edgeIdx].toString(model.featureAlphabet));
 
 					}
 
@@ -891,6 +949,8 @@ public class Lattice {
 						if (fv != null && fv.length == getNumEdges()) 
 							System.out.println("\t Features: " + fv[edgeIdx].toString(model.featureAlphabet));
 						
+						if (fvEdge != null) 
+							System.out.println("\t fvEdge Features: " + fvEdge[edgeIdx].toString(model.featureAlphabet));
 					}
 				
 				}
@@ -898,18 +958,18 @@ public class Lattice {
 			}
 		}
 
-		System.out.println("edge dump:");
-		for (int pos = 0; pos <= length; pos++) {
-			for (int edgeIdx = getEdgeOffset(pos); edgeIdx < getEdgeOffset(pos+1); edgeIdx++) {
-				System.out.printf("pos %d: [%d] (%d,%d)", pos, edgeIdx,
-						getLeftStateIdx(edgeIdx), getRightStateIdx(edgeIdx));
-				
-				if (edgeScores != null)
-					System.out.printf(" score=%g", edgeScores[edgeIdx]);
-				
-				System.out.println();
-			}
-		}
+//		System.out.println("edge dump:");
+//		for (int pos = 0; pos <= length; pos++) {
+//			for (int edgeIdx = getEdgeOffset(pos); edgeIdx < getEdgeOffset(pos+1); edgeIdx++) {
+//				System.out.printf("pos %d: [%d] (%d,%d)", pos, edgeIdx,
+//						getLeftStateIdx(edgeIdx), getRightStateIdx(edgeIdx));
+//				
+//				if (edgeScores != null)
+//					System.out.printf(" score=%g", edgeScores[edgeIdx]);
+//				
+//				System.out.println();
+//			}
+//		}
 
 
 
@@ -1154,6 +1214,11 @@ public class Lattice {
 		ArrayUtil.writeIntArray(out,edgeLeftStates);
 		ArrayUtil.writeIntArray(out,edgeRightStates);
 		ArrayUtil.writeFeatureVectorArray(out,fv);
+		
+		ArrayUtil.writeFeatureVectorArray(out,fvPos);
+		ArrayUtil.writeFeatureVectorArray(out,fvState);
+		ArrayUtil.writeFeatureVectorArray(out,fvEdge);
+		
 		// scores are never saved. 
 		
 		
@@ -1196,6 +1261,56 @@ public class Lattice {
 		
 		return pos-1; // pos will have advanced one extra step;
 	}
+	
+	
+	public void scorePositionFeatures(int multiplier, Weights w) {
+		
+		for (int pos = 0; pos < length(); pos++){
+			int start = getStateOffset(pos);
+			int end = getStateOffset(pos+1);
+			for (int idx = start; idx < end; idx++) {
+
+				int state = getStateID(idx);
+				int offset = state*multiplier;
+								
+//				for (int i : fvPos[pos].getKeys()) {
+//					System.out.println(model.stateToString(this, state) + " X " + model.featureAlphabet.reverseLookup(i));
+//				}
+				
+				stateScores[idx] += w.score(fvPos[pos], offset);
+			}
+		}
+	}
+
+	public void scoreStateFeatures(Weights w) {
+
+		
+		for (int idx = 0; idx < fvState.length; idx++) {
+//			System.out.println(fvState[idx].getKeys().length);
+//			for (int i : fvState[idx].getKeys()) {
+//				System.out.println(model.stateToString(this, getStateID(idx)) + " X " + model.featureAlphabet.reverseLookup(i));
+//			}
+			stateScores[idx] += w.score(fvState[idx]);
+		}
+		
+//		for (int pos = 0; pos < length(); pos++) {
+//			int start = getStateOffset(pos);
+//			int end = getStateOffset(pos+1);
+//			for (int idx = start; idx < end; idx++)
+//				stateScores[idx] += w.score(fvState[idx]);
+//			
+//		}
+	}	
+		
+	public void incrementPositionFeatures(int multiplier, Weights w, int stateidx, double rate) {
+		int pos = findStatePosOffset(stateidx);
+		w.increment(fvPos[pos], getStateID(stateidx)*multiplier, rate);
+	}
+	
+	public void incrementStateFeatures(Weights w, int stateidx, double rate) {
+		w.increment(fvState[stateidx], rate);
+	}
+	
 
 
 }

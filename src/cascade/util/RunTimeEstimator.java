@@ -55,6 +55,26 @@ public class RunTimeEstimator {
 //		}
 	}
 	
+	public String getExtraInfo() { 
+		 String report = "";
+			if (reportStatMethods != null) {
+				
+				for (int i = 0; i < reportStatMethods.size(); i++) {
+					Method m = reportStatMethods.get(i);
+					Object o = reportStatObjects.get(i);
+					
+					try {
+						report += "[" + (String) m.invoke(o, (Object [])null) + "] ";
+					} catch (Exception e) {
+						e.printStackTrace();
+						System.exit(1);
+					}
+				}
+			}
+			
+		return report; 
+	};
+	
 	public boolean report() {
 		return this.report(++currentIteration);
 	}
@@ -90,21 +110,7 @@ public class RunTimeEstimator {
 			if (metricString != null)
 				rateString += ", " + metricString;
 			
-			String report = "";
-			if (reportStatMethods != null) {
-				
-				for (int i = 0; i < reportStatMethods.size(); i++) {
-					Method m = reportStatMethods.get(i);
-					Object o = reportStatObjects.get(i);
-					
-					try {
-						report += "[" + (String) m.invoke(o, (Object [])null) + "] ";
-					} catch (Exception e) {
-						e.printStackTrace();
-						System.exit(1);
-					}
-				}
-			}
+			String report = getExtraInfo();
 			
 			System.out.printf("\t%.1f%% - %s elapsed / %s remaining [%.2f %s] %s\n", percentageComplete*100,
 					elapsedStr, remainingStr, rate, rateString, report);

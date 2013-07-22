@@ -50,6 +50,7 @@ public class NOrderSCP extends UpdateRule {
 						model.alphaVals[lattice.getLeftStateIdx(idx)]);
 				
 			}
+			lattice.print();
 			throw new RuntimeException("inference is broken for some reason: " + 
 					lattice.maxEdgeScore + " != " + argmaxScore);
 		}

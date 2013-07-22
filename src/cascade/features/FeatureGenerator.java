@@ -73,12 +73,16 @@ public abstract class FeatureGenerator implements Serializable {
 	 * 
 	 * @param inst
 	 * @param pos
-	 * @param state
+	 * @param state 
 	 */
 	public void computeFeatures(CascadeModel model, SentenceInstance inst, int pos, int state) {
 		throw new UnsupportedOperationException("Method not implemented by class: " + this.getClass().getCanonicalName());
 	}
-	
+		
+	public void computeFeatures(CascadeModel model, SentenceInstance inst, int pos, int state, int order) {
+		throw new UnsupportedOperationException("Method not implemented by class: " + this.getClass().getCanonicalName());
+	}
+		
 	public void computeEdgeFeatures(CascadeModel model, SentenceInstance inst, int pos, int s1, int s2){
 		throw new UnsupportedOperationException("Method not implemented by class: " + this.getClass().getCanonicalName());
 	}

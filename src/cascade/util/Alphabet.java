@@ -127,9 +127,21 @@ public class Alphabet implements Serializable {
 	}
 
 	public String reverseLookup(int idx) {
-		return reverseLookup[idx];
+		if (idx < 0)
+			return null;
+		else return reverseLookup[idx];
 	}
 
+	/**
+	 * Adds an extra mapping from a given key string to a given int val. NOTE:
+	 * This is potentially VERY UNSAFE, as it does not increase the SIZE of the alphabet.
+	 * 
+	 * @param key
+	 * @param id
+	 */
+	public void addExtraMapping(String key, int id) {
+		map.put(key, id);
+	}
 	
 }
 

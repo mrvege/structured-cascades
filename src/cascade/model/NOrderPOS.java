@@ -9,7 +9,9 @@ import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.List;
 
 import cascade.features.FeatureGenerator;
 import cascade.features.FeatureVector;
@@ -18,6 +20,7 @@ import cascade.features.NGramPOSFeatures;
 import cascade.features.Weights;
 import cascade.io.Corpus;
 import cascade.io.ObjectReader;
+import cascade.io.SentenceInstance;
 import cascade.io.Sequence;
 import cascade.lattice.Lattice;
 import cascade.lattice.Viterbi;
@@ -28,6 +31,7 @@ import cascade.learn.LossFunctions;
 import cascade.programs.Options;
 import cascade.util.Alphabet;
 import cascade.util.ArrayUtil;
+import cascade.util.CountingAlphabet;
 
 /**
  * Instantiation of the NOrderModel based on POS tagging but applicable to 
@@ -39,7 +43,7 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 	/**
 	 * 
 	 */
-	protected static final long serialVersionUID = 2L;
+	protected static final long serialVersionUID = 3L;
 	
 	/**
 	 * Constant to represent the NULL tag, which is necessary to construct higher order Ngrams
@@ -64,7 +68,7 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 	/**
 	 * Whether or not to compute per-position features (this leads to explosive feature growth)
 	 */
-	public boolean usePositionFeatures = false;
+	public boolean usePositionFeatures = true;
 	
 	/**
 	 * The maximum number of possible conditional per-position features that will be stored in memory.
@@ -88,7 +92,17 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 	 * Alphabet to store mapping from state #'s to POS tags. 
 	 */
 	public Alphabet POSAlphabet;
+
+	public Alphabet stateAlphabet;
+
 	
+	public int numPositionFeatures = 0;
+	public List<Boolean> shouldComputeFeatures = null;
+	
+	protected int FULL_NULL_STATE;
+
+	Options options;
+
 	String margLeftString, margRightString;
 	
 	// buffer variables
@@ -122,7 +136,7 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 			if (truth[i] != guess[i])
 				mistakes++;
 		}
-		stats.totalClassError += mistakes/guess.length;
+		stats.totalClassError += mistakes;
 		stats.numSequenceMistakes += mistakes > 0 ? 1 : 0;
 
 		// compute mean and max
@@ -214,53 +228,7 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 	public Lattice createLattice(Sequence seq) {
 		throw new UnsupportedOperationException("This is a higher order model that cannot create lattices from scratch");
 	}
-
 	
-	@Override
-	public FeatureVector[] getEdgeFeatures(Lattice lattice) {
-
-		FeatureVector fv [] = new FeatureVector[lattice.getNumEdges()];
-		
-		double quintiles[][] = new double[lattice.length()][featureGen.getNumMarginalQuintiles()];
-		
-		// NB: loop using <=, not <
-		for (int pos = 0; pos <= lattice.length(); pos++) {
-			
-			int start = lattice.getEdgeOffset(pos);
-			int end = lattice.getEdgeOffset(pos+1);
-			
-			// compute marginal quintiles
-			if (pos < lattice.length())
-				featureGen.computeQuintiles(lattice.stateScores, lattice.getStateOffset(pos), lattice.getStateOffset(pos+1), quintiles[pos]);
-			
-			for (int idx = start; idx < end; idx++) {
-
-				if (pos < lattice.length()) { 
-					
-					int rightIdx = lattice.getRightStateIdx(idx);
-					int leftIdx = lattice.getLeftStateIdx(idx);
-					
-					if (rightIdx != Lattice.NULL_IDX && addQuintileFeatures)   
-						featureGen.addQuintileFeatures(margRightString, quintiles[pos], lattice.stateScores[rightIdx]);
-					
-//					if (leftIdx != Lattice.NULL_IDX)
-//						featureGen.addQuintileFeatures(margLeftString, quintiles[pos-1], lattice.stateScores[leftIdx]);
-					
-					featureGen.computeFeatures(this, lattice.seq.getInstance(), pos, computeNGramIDFromEdge(lattice, idx));
-				}			
-
-				fv[idx] = featureGen.finalizeFeatureVector();
-			}
-		} 
-		
-		return fv;
-	}
-	
-	@Override
-	public FeatureVector[] getStateFeatures(Lattice lattice) {
-		throw new UnsupportedOperationException("This model does not generate state-wise features");
-	}
-
 	/**
 	 * Computes the state ID's of the truth, which might be different than the actual tag #'s.
 	 * 
@@ -318,6 +286,7 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 	@Override
 	public void init(Options opts) {
 		super.init(opts);		
+		this.options = opts;
 		
 		if (order == -1)
 			throw new RuntimeException("Order is a required parameter for NGram Models!!");
@@ -339,53 +308,19 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 		// add in a null tag
 		POSAlphabet.lookupIndex(NULLTAG);
 		POSAlphabet.stopGrowth();
-
+		stateAlphabet = POSAlphabet;
+		
+		FULL_NULL_STATE = computeNullState(order);
+		
 		margLeftString = "margLeft_o" + order;
 		margRightString = "margRight_o" + order;
 
 		featureAlphabet = new Alphabet();
-		if (featureGen == null)
-			featureGen = new NGramPOSFeatures();
 
-		featureGen.init(opts);
-		featureGen.setWorkingAlphabet(featureAlphabet);
-		featureGen.setComputeOnly(true);
+		// precompute the feature set 
+		precomputeFeatures();			
+		featureAlphabet.stopGrowth();
 
-		System.out.println("model " + this.getClass().getCanonicalName() + " initialized");
-		System.out.println("featureGen: " + this.featureGen.getClass().getCanonicalName());
-		
-		if (usePositionFeatures) {
-			featureAlphabet.allowGrowth();
-			
-			for(Sequence s: c.train[c.train.length-1]) {
-				String[] tags = (useCoarseTags ? s.getInstance().cpostags : s.getInstance().postags);
-
-				for (int pos = 0; pos < (tags.length-1); pos++) 
-					featureGen.computePositionFeatures(this, s.getInstance(), pos);
-			}
-			
-		} else {
-			
-			featureGen.addAllQuintileFeatures(margLeftString, margRightString);		
-			if (useSupportedFeaturesOnly) {
-				int n = 0;
-				for(Sequence s: c.train[c.train.length-1]) {
-					String[] tags = (useCoarseTags ? s.getInstance().cpostags : s.getInstance().postags);
-					
-//					s.print();
-					// NB: we are computing features over EDGES so we ADD ONE to the order
-					for (int pos = 0; pos < (tags.length-1); pos++) 
-						featureGen.computeFeatures(this, s.getInstance(), pos, computeNGramIDFromTags(tags, pos, order+1));
-					
-//					if (n++ > 2)
-//						break;
-				}
-				featureAlphabet.stopGrowth();
-			}			
-		}
-		featureGen.setComputeOnly(false);
-
-		System.out.println("Number of features pre-computed: " + featureAlphabet.size());
 		System.out.println("Number of possible tags pre-computed: " + POSAlphabet.size() + " = " + pow(order+1) + " grams");
 	}
 	
@@ -551,18 +486,6 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 		return mask;
 	}
 
-	@Override
-	public Lattice expandLattice(Lattice lattice, boolean[] mask) {
-		
-		Lattice newLattice = new Lattice(lattice, this, mask);
-		if (usePositionFeatures)
-			newLattice.fv = getPositionFeatures(newLattice);
-		else
-			newLattice.fv = getEdgeFeatures(newLattice);
-		
-		return newLattice;
-	}
-	
 	public int[] getNextStates(int state) {
 		
 		int numLabels = POSAlphabet.size();
@@ -611,9 +534,12 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 
 		order = in.readInt();
 		useSupportedFeaturesOnly = in.readBoolean();
+		numPositionFeatures = in.readInt();
+		FULL_NULL_STATE = in.readInt();
 		
 		POSAlphabet = (Alphabet) in.readObject();
 		POSAlphabet.stopGrowth();
+		stateAlphabet = POSAlphabet;
 		featureAlphabet = (Alphabet) in.readObject();
 		
 		int l = in.readInt();
@@ -635,7 +561,10 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 		
 		out.writeInt(order);
 		out.writeBoolean(useSupportedFeaturesOnly);
-		
+		out.writeInt(numPositionFeatures);
+		out.writeInt(FULL_NULL_STATE);
+
+	
 		out.writeObject(POSAlphabet);
 		out.writeObject(featureAlphabet);
 		
@@ -699,6 +628,76 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 		
 	}
 
+	public int computeTagFromNGramID(int n, long ngramID, int offset) {
+		return computeTagFromNGramID(null, n, ngramID, offset);
+	}
+	
+	/**
+	 * Computes the ngramID corresponding to conjunction of endpoints of a lattice edge
+	 */
+	public long computeNGramIDFromEdge(int leftState, int rightState) {
+
+		long numLabels = stateAlphabet.size();
+		long  suffix = leftState % numLabels;
+	
+		long id = rightState * numLabels + suffix;
+		
+		return id; 
+	}
+	/**
+	* Computes corresponding ngram id over a lower order ngram embedded within a higher order ngram.
+	*/
+	public long computeLowerOrderNGramID(int n, long state) {
+				
+		if (n >= order)
+			throw new UnsupportedOperationException("n = " + n + " is not lower than order " + order);
+		
+		return state / pow(order-n); // note: integer division means floor
+	}
+	
+	/**
+	 * Returns the embedded labeling (tag #) at a given time offset in an n-gram.
+	 * 
+	 * @param n 
+	 * 	 order of the ngram (e.g. 1 == UNIGRAM)
+	 * @param ngramID
+	 *   ID of the ngram
+	 * @param offset
+	 *  offset in time (t=0 -> current state)
+	 * @return
+	 */
+	public int computeTagFromNGramID(Lattice l, int n, long ngramID, int offset) {
+
+		if (ngramID < 0) 
+			throw new RuntimeException("Invalid ngramID = " + ngramID);
+
+		if (n < 2)
+			return (int)ngramID;
+		
+		long state;
+	
+		offset = n - offset - 1;
+		
+		// current state
+		if (offset == 0) {
+			state = ngramID % pow(1);
+//			System.out.println(ngramID + " " + pow(1) + " " + state + " " + ((int)state));
+		}
+		else {
+			long id = (ngramID / pow(offset));
+			state = id % pow(1);
+		}
+		
+		if ((int)state < 0) {
+			System.out.println(state);
+			System.out.printf("offset=%d, ngramID=%d, pow(1)=%d, pow(offset)=%d\n", offset, ngramID, pow(1), pow(offset));
+			throw new RuntimeException("BAD STATE DETECTED");
+		}
+		
+		return (int)state;
+		
+	}
+	
 	@Override
 	public int[] getNextStates(Sequence seq, int pos, int state) {
 		return getNextStates(state);
@@ -710,61 +709,177 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 	}
 
 	@Override
-	public FeatureVector[] getPositionFeatures(Lattice lattice) {
-			
-		FeatureVector fv [] = new FeatureVector[lattice.length()];
-		
-		double quintiles[][] = new double[lattice.length()][featureGen.getNumMarginalQuintiles()];
-		
-		featureGen.setWorkingAlphabet(featureAlphabet);
-		
-		// NB: loop using <=, not <
-		for (int pos = 0; pos < lattice.length(); pos++) {
-									
-			// compute marginal quintiles
-			if (pos < lattice.length())
-				featureGen.computeQuintiles(lattice.stateScores, lattice.getStateOffset(pos), lattice.getStateOffset(pos+1), quintiles[pos]);
-			
-			featureGen.addPositionalQuintileFeatures(this, lattice, pos, quintiles[pos]);			
-				
-			featureGen.computePositionFeatures(this, lattice.seq.getInstance(), pos);
-
-			fv[pos] = featureGen.finalizeFeatureVector();
-		} 
-		
-		return fv;
-	}
-
-	@Override
 	public void scoreLatticeEdges(Weights w, Lattice lattice) {
-	
-		if (usePositionFeatures){
-			for (int pos = 0; pos < lattice.length(); pos++) {
-				
-				int start = lattice.getEdgeOffset(pos);
-				int end = lattice.getEdgeOffset(pos+1);
-				
-				for (int edgeIdx = start; edgeIdx < end; edgeIdx++) {
-					
-					int offset = computeNGramIDFromEdge(lattice, edgeIdx)*featureAlphabet.size();
+		lattice.edgeScores = ArrayUtil.ensureCapacityReset(lattice.edgeScores, lattice.getNumEdges());
+		
+		scoreLatticeStates(w, lattice);
+		
+		int N = getConditionalFeatureOffset();
+		for (int i = 0; i < lattice.fvEdge.length; i++) {
+			
+			lattice.edgeScores[i] = w.score(lattice.fvEdge[i], N);
+			int idx = lattice.getRightStateIdx(i);
 
-					if (useMixing)
-						lattice.edgeScores[edgeIdx] = w.scoreMixed(lattice.fv[pos], offset);
-					else
-						lattice.edgeScores[edgeIdx] = w.score(lattice.fv[pos], offset);
-				}
-			}
-		} else {
-			for (int i = 0; i < lattice.fv.length; i++)
-				lattice.edgeScores[i] = w.score(lattice.fv[i]);
+			if (idx != lattice.NULL_IDX)
+				lattice.edgeScores[i] += lattice.stateScores[idx];
 		}
 	}
 
 	@Override
+	public Lattice expandLattice(Lattice lattice, boolean[] mask) {		
+				
+		Lattice newLattice = new Lattice(lattice, this, mask);
+		
+		if (usePositionFeatures)
+			newLattice.fvPos = getPositionFeatures(newLattice);
+		
+		newLattice.fvState = getStateFeatures(newLattice);
+		newLattice.fvEdge = getEdgeFeatures(newLattice);
+		
+		return newLattice;
+	}
+
+	@Override
 	public void scoreLatticeStates(Weights w, Lattice lattice) {
-		throw new UnsupportedOperationException(
-				"Method not supported by class: "
-						+ this.getClass().getCanonicalName());
+
+		lattice.stateScores = ArrayUtil.ensureCapacityReset(lattice.stateScores, lattice.getNumStates());
+		
+		int N = getConditionalFeatureOffset();
+		
+		for (int pos = 0; pos < lattice.length(); pos++){
+			
+			int start = lattice.getStateOffset(pos);
+			int end = lattice.getStateOffset(pos+1);
+			
+			for (int idx = start; idx < end; idx++) {
+
+				int ngram = lattice.getStateID(idx);
+				int state =  computeTagFromNGramID(order, ngram, 0);
+				
+				int offset = state*numPositionFeatures;
+				
+				if (usePositionFeatures)
+					lattice.stateScores[idx] += w.score(lattice.fvPos[pos], offset);
+
+				if (lattice.fvState != null)
+					lattice.stateScores[idx] += w.score(lattice.fvState[idx], N);
+			}
+		}
+	}	
+
+	
+	/* (non-Javadoc)
+	 * @see cascade.model.NOrderPOS#getStateFeatures(cascade.lattice.Lattice)
+	 * 
+	 * By default, the ONLY state features are marginals from the previous lattice
+	 */
+	public FeatureVector[] getStateFeatures(Lattice lattice) {
+		
+		FeatureVector fv [] = new FeatureVector[lattice.getNumStates()];
+		
+		SentenceInstance inst = lattice.seq.getInstance();
+		
+		double quintiles[][] = new double[lattice.length()][featureGen.getNumMarginalQuintiles()];
+			
+		for (int pos = 0; pos < lattice.length(); pos++) {
+			int start = lattice.getStateOffset(pos);
+			int end = lattice.getStateOffset(pos+1);
+
+			//compute marginal quintiles 
+			if (lattice.stateScores != null)
+				featureGen.computeQuintiles(lattice.stateScores, lattice.getStateOffset(pos), lattice.getStateOffset(pos+1), quintiles[pos]);
+
+			for (int idx = start; idx < end; idx++) {
+				
+				if (lattice.stateScores != null)
+					featureGen.addQuintileFeatures(margRightString, quintiles[pos], lattice.stateScores[idx]);
+				
+				
+				for (int o = 1; o <= order; o++) {
+						featureGen.computeFeatures(this, inst, pos, lattice.getStateID(idx), o);
+					
+				}
+				
+				fv[idx] = featureGen.finalizeFeatureVector();
+				
+				//System.out.println(fv[idx].toString(featureAlphabet));
+			}
+		}					
+
+		return fv;
+	}
+	
+	public FeatureVector[] getPositionFeatures(Lattice lattice) {
+		FeatureVector [] fv = new FeatureVector[lattice.length()];
+		
+		SentenceInstance inst = lattice.seq.getInstance();
+		
+		for (int pos = 0; pos < lattice.length(); pos++){
+			featureGen.computePositionFeatures(this, inst, pos);
+			fv[pos] = featureGen.finalizeFeatureVector();
+		}					
+
+		return fv;
+	}
+	
+	@Override
+	public FeatureVector[] getEdgeFeatures(Lattice lattice) {
+
+		FeatureVector fv [] = new FeatureVector[lattice.getNumEdges()];
+				
+		// NB: loop using <=, not <
+		for (int pos = 0; pos <= lattice.length(); pos++) {
+			
+			int start = lattice.getEdgeOffset(pos);
+			int end = lattice.getEdgeOffset(pos+1);
+			
+			for (int idx = start; idx < end; idx++) {
+
+				int rightIdx = lattice.getRightStateIdx(idx);
+				int leftIdx = lattice.getLeftStateIdx(idx);
+				
+				if (rightIdx != Lattice.NULL_IDX) {
+					// NB: we are computing features over EDGES so we ADD ONE to the order
+					int state = lattice.getStateID(rightIdx);
+					int prevstate = leftIdx == Lattice.NULL_IDX ? FULL_NULL_STATE : lattice.getStateID(leftIdx);
+
+					featureGen.computeEdgeFeatures(this, lattice.seq.getInstance(), pos, prevstate, state);
+				}
+				
+				fv[idx] = featureGen.finalizeFeatureVector();
+			}
+		} 
+
+		return fv;
+	}
+	
+	@Override
+	public void increment(Lattice lattice, int idx, Weights w, double rate) {
+		
+		int N = getConditionalFeatureOffset();
+
+		// increment all edge and state states
+		int stateidx = lattice.getRightStateIdx(idx);
+		if (stateidx != lattice.NULL_IDX) {
+
+			int ngram = lattice.getStateID(stateidx);
+			int state =  computeTagFromNGramID(order, ngram, 0);
+				
+			int offset = state*numPositionFeatures;
+			
+			int pos = lattice.findStatePosOffset(stateidx);
+			
+			if (usePositionFeatures)
+				w.increment(lattice.fvPos[pos], offset, rate);
+			w.increment(lattice.fvState[stateidx], N, rate);
+		}
+		
+		w.increment(lattice.fvEdge[idx], N, rate);
+		
+	}
+	
+	public int getConditionalFeatureOffset() {
+		return numPositionFeatures*(stateAlphabet.size()-1);
 	}
 	
 	/**
@@ -790,40 +905,24 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 		return computeTagFromNGramID(lattice, order, lattice.getStateID(idx), 0);
 	}
 
-
 	@Override
 	public int getNumberOfFeatures() {
-		
-		if (usePositionFeatures) {
-			if ( ((long)featureAlphabet.size()*(long)pow(order+1)) > (long)maxCapacity) {
-				useMixing = true;
-				return PrimeFinder.nextPrime(maxCapacity);
-			} else
-				useMixing = false;
-			
-			return featureAlphabet.size()*pow(order+1);
-		} else return featureAlphabet.size();
+		return numPositionFeatures*(stateAlphabet.size()-1) + featureAlphabet.size();
+	}
+	
+	public int getNumberOfPositionFeatures() {
+		return numPositionFeatures;
 	}
 
-	@Override
-	public void increment(Lattice lattice, int idx, Weights w, double rate) {
+	public boolean doComputeFeatures(int order) {
 
-		if (usePositionFeatures) {
-
-			int pos = lattice.findEdgePosOffset(idx);
-			if (pos >= lattice.length())
-				return;
-			
-			int offset = computeNGramIDFromEdge(lattice, idx)*featureAlphabet.size();
-			if (useMixing)
-				w.incrementMixed(lattice.fv[pos], offset, rate);
-			else
-				w.increment(lattice.fv[pos], offset, rate);
-		}
+		if (shouldComputeFeatures == null) 
+			return (order <= this.order);
 		else
-			super.increment(lattice, idx, w, rate);
-	}
+			return shouldComputeFeatures.get(order);
 
+	}
+	
 	@Override
 	public String toString() {
 		return order + " Order POS Model: " + POSAlphabet.size() + 
@@ -831,5 +930,61 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 		" features " + (usePositionFeatures ? ("," + pow(order+1) + " grams, " + featureAlphabet.size() + " positional features (" + 
 		pow(order+1)*featureAlphabet.size() + " possible)") : "") + " ";
 	}
+
+	public void precomputeFeatures() {
+		
+		featureAlphabet = new Alphabet();
+		
+		featureGen.init(options);
+		featureGen.setWorkingAlphabet(featureAlphabet);
+		featureGen.setComputeOnly(true);
+	
+		System.out.println("model " + this.getClass().getCanonicalName() + " initialized with " + stateAlphabet.size() + " tags");
+		System.out.println("featureGen: " + this.featureGen.getClass().getCanonicalName());
+		
+		// pass 1: position features
+		if (usePositionFeatures)
+			for(Sequence s: options.corpus.getTrainSequences())
+				for (int pos = 0; pos < s.length(); pos++) 
+					featureGen.computePositionFeatures(this, s.getInstance(), pos);
+		
+		numPositionFeatures = featureAlphabet.size();
+	
+		System.out.println("Computed "  + numPositionFeatures + " position features");
+		
+		// pass 2: state + edge features
+		for(Sequence s: options.corpus.getTrainSequences()) {
+			String[] tags = s.getInstance().postags;
+		
+			int prevstate = FULL_NULL_STATE;
+			for (int pos = 0; pos < (tags.length-1); pos++) {
+	
+				// NB: we are computing features over EDGES so we ADD ONE to the order
+				int state = (int)computeNGramIDFromTags(tags, pos, order);
+				
+				for (int o = 1; o <= order; o++) {
+					featureGen.computeFeatures(this, s.getInstance(), pos, state, o);
+				}
+				featureGen.computeEdgeFeatures(this, s.getInstance(), pos, prevstate, state);
+				prevstate = state;
+			}
+		}
+		
+		for (int i = 0; i < 50; i++)
+			System.out.printf("f[%d] = %s\n", numPositionFeatures+i, featureAlphabet.reverseLookup(numPositionFeatures+i));
+		
+		// add quintile features					
+		margLeftString = "margLeft_o" + order;
+		margRightString = "margRight_o" + order;
+		featureGen.addAllQuintileFeatures(margLeftString, margRightString);	
+		featureGen.setComputeOnly(false);
+		
+		System.out.println("Number of features pre-computed: ");
+		System.out.printf("\t%d pos features (%d total)\n", numPositionFeatures, numPositionFeatures*stateAlphabet.size());
+		System.out.printf("\t%d state+edge features (offset=%d)\n", featureAlphabet.size()-numPositionFeatures, getConditionalFeatureOffset());
+		System.out.printf("\t%s total\n", new DecimalFormat().format(getNumberOfFeatures()));
+	}
+	
+	
 
 }

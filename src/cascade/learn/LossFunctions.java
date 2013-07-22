@@ -396,7 +396,7 @@ public class LossFunctions  {
 				mistakes++;
 		}
 
-		return mistakes/lattice.length();
+		return mistakes;
 	}
 
 	

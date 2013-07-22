@@ -94,7 +94,7 @@ public class GeneralizationStatistics {
 		
 		avgTestTime /= numSequences;
 		
-		avgError = 100*totalClassError / numSequences;
+		avgError = 100*totalClassError / numPositions;
 		avgErrorSequence = 100*(double)numSequenceMistakes/(double)numSequences;
 		
 		avgStatesPerPosition = numStates / numPositions;

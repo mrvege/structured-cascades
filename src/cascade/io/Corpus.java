@@ -3,6 +3,8 @@ package cascade.io;
 
 import cascade.util.*;
 
+import gnu.trove.TIntObjectHashMap;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
@@ -15,8 +17,11 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Random;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -115,9 +120,16 @@ public class Corpus {
 	public Lattice[][] testLattice;
 	public Lattice[] develLattice;
 
+	
+	
 	public Corpus() {
 		
 	}
+	
+	/**
+	 * @return pointer to the entire set of training Sequences
+	 */
+	public Sequence [] getTrainSequences() { return train[train.length-1]; }
 	
 	/**
 	 * create train[] devel[] and test[] for the jack knife as well as a final one by reading the 
@@ -142,7 +154,7 @@ public class Corpus {
 	public void init() throws IOException{
 		// FIXME: we're currently assuming that the input data file is randomly sorted -- right?
 		// maybe we should randomize its order to make the training work
-		Sequence[] fullTrain = readFile(src+"_train.txt", maxTrainingSize);
+		Sequence[] fullTrain = readFile(getTrainFile(), maxTrainingSize);
 		// development is first numDevel sequences of fullTrain, for all partitions. 
 		int numDevel = (int)((fullTrain.length)*develFraction);
 		devel = new Sequence[numDevel];
@@ -170,7 +182,7 @@ public class Corpus {
 		}
 		
 		// create the final jack knife which has the full data
-		test[numJackKnives] = readFile(src+"_test.txt", maxTestingSize);
+		test[numJackKnives] = readFile(getTestFile(),  maxTestingSize);
 		train[numJackKnives] = new Sequence[fullTrain.length];
 		int trainInd = 0;
 		for (int j = 0; j < tmp.length; j++) {
@@ -188,10 +200,21 @@ public class Corpus {
 			boolean success = directory.mkdirs();
 			if(!success) throw new IOException("Failed to create directory!");
 		}
+			
+		// initialize stuff for random access;
+		random = new Random(options.seed);
+			
+		randomSeqAccess = new TIntObjectHashMap<Sequence>();
+		for (Sequence seq : getTrainSequences()) 
+			randomSeqAccess.put(seq.hashCode(), seq);
 		
 	}
 	
 	
+	public String getTestFile() {
+		return src+"_test.txt";
+	}
+
 	/**
 	 * Take a sequence and split it into approximately even parts. 
 	 * @param fullTrain
@@ -227,10 +250,14 @@ public class Corpus {
 		SentenceReader reader = new SentenceReader();
 		reader.startReading(fname);
 		SentenceInstance inst;
-		int id = 0, numread = 0;
+		int id = 0, numread = 0, numtotal = 0;
 		ArrayList<Sequence> res = new ArrayList<Sequence>();
 		System.out.println("Starting to read sequences from "+fname);
 		while ( (inst = reader.getNext()) != null && numread < maxInstances) {
+			
+			numtotal++;
+			//if (numtotal % 500 == 0)
+			//	System.out.println(numread + "," + numtotal);
 
 			// check that it matches length constraints
 			if (inst.length()-1 < minSentenceLength || inst.length()-1 > maxSentenceLength)
@@ -241,6 +268,7 @@ public class Corpus {
 			Sequence seq = new Sequence(id++);
 			seq.setInstance(inst);
 			res.add(seq);
+			
 		}	
 		reader.close();
 		
@@ -325,18 +353,41 @@ public class Corpus {
 			if (storeBaseLatticesInRAM) {
 				testLattice[partition] = new Lattice[test[partition].length];
 				computeLattices(model, test[partition], testLattice[partition]);
-			} else
-				writeLattices(getFnameFor(partition, 0), model, test[partition]);
+			} else {
+				
+				
+				writeLattices(model, TrainDevTest.Test, partition, 0, test[partition]); //getFnameFor(partition, 0), model, test[partition]);
+				
+			}
 		}
 		
 		if (storeBaseLatticesInRAM) {
 			develLattice = new Lattice[devel.length];
 			computeLattices(model, devel, develLattice);	
-		} else
-			writeLattices(getDevNameFor(0), model, devel);
+		} else {
+			
+			writeLattices(model, TrainDevTest.Dev, 0, 0, devel); //getDevNameFor(0), model, devel);
+		}
 		
 	}
 	
+	private void writeLattices(CascadeModel model, TrainDevTest type, int partition, int level, Sequence seq []) throws IOException {
+		options.print(1, String.format("Writing out %d NEW lattices!\n", seq.length)); //to '%s'\n", seq[i].length, fname));
+
+		currentlyReadingType = type;
+		openNewLatticeCache(partition, level);
+		
+		RunTimeEstimatorForLattices est = new RunTimeEstimatorForLattices(seq.length, options.trainUpdatePercentage);
+		for (int i = 0; i < seq.length; i++) {
+			Lattice l = model.createLattice(seq[i]);
+			est.tallyLattice(l);
+			saveLatticeToCache(l);
+			if (options.verbosity > 1) est.report();
+		}
+		
+		closeNewLatticeCache();
+	}
+
 	private void computeLattices(CascadeModel m, Sequence [] ls, Lattice [] l) {
 		options.print(1, String.format("Computing %d NEW lattices to RAM\n", ls.length));
 		RunTimeEstimator est = new RunTimeEstimator(ls.length, 0.25);
@@ -351,12 +402,14 @@ public class Corpus {
 	/**
 	 * Creates a set of <i>initial</i> lattices from Sequence objects and writes them to file. 
 	 */
+	@Deprecated
 	private void writeLattices(String fname, CascadeModel m, Sequence[] ls) throws FileNotFoundException, IOException{
 		options.print(1, String.format("Writing out %d NEW lattices to '%s'\n", ls.length, fname));
 		DataOutputStream out = getOutputStream(fname);
-		RunTimeEstimator est = new RunTimeEstimator(ls.length, 0.25);
+		RunTimeEstimatorForLattices est = new RunTimeEstimatorForLattices(ls.length, options.trainUpdatePercentage);
 		for (int i = 0; i < ls.length; i++) {
 			Lattice l = m.createLattice(ls[i]);
+			est.tallyLattice(l);
 			l.write(out);
 			if (options.verbosity > 1)
 				est.report();
@@ -369,6 +422,8 @@ public class Corpus {
 	 * openNewLatticeCache, closeNewLatticeCache and saveLatticeToCache
 	 */
 	DataOutputStream latticeCacheOut = null;
+
+	private int currentlyWritingLatticeNum;
 	
 	/**
 	 * opens an output file corresponding to the test set of the given partition 
@@ -395,6 +450,15 @@ public class Corpus {
 
 		options.print(1, String.format("Opening new lattice cache '%s'\n", fname));
 		latticeCacheOut = getOutputStream(fname);
+		
+		if (currentlyReadingType == TrainDevTest.Dev)
+			currentlyWritingDirectory = new int[devel.length+1];
+		else
+			currentlyWritingDirectory = new int[test[partition].length+1];
+		currentlyWritingDirectoryName = fname + "-directory";
+		currentlyWritingLatticeNum = 0;
+		options.print(1, String.format("will use directory '%s'\n", currentlyWritingDirectoryName));
+
 	}
 	
 	/**
@@ -403,6 +467,7 @@ public class Corpus {
 	 */
 	public void saveLatticeToCache(Lattice newLattice) throws IOException {
 		newLattice.write(latticeCacheOut);
+		currentlyWritingDirectory[++currentlyWritingLatticeNum] = latticeCacheOut.size(); 
 		
 //		latticeCacheOut.writeObject(newLattice);
 //		latticeCacheOut.reset(); // this means don't keep track of which objects have already been saved to avoid saving them again. 
@@ -410,6 +475,11 @@ public class Corpus {
 
 	public void closeNewLatticeCache() throws IOException {
 		latticeCacheOut.close();
+		
+		DataOutputStream out = new DataOutputStream(new FileOutputStream(currentlyWritingDirectoryName));
+		ArrayUtil.writeIntArray(out, currentlyWritingDirectory);
+		out.close();
+		
 		latticeCacheOut = null;
 	}
 
@@ -461,6 +531,17 @@ public class Corpus {
 	int currentlyReadingLatticeIndex = -1;
 	
 	DataInputStream latticeCacheIn = null;
+		
+	public boolean useRandomAccess = false;
+
+	private int [][] latticeCacheDirectory = null;
+	private RandomAccessFile randomTrainSetAccess[] = null;
+	private Random random = null;
+	private TIntObjectHashMap<Sequence> randomSeqAccess = null;
+	
+	
+	private int [] currentlyWritingDirectory = null;
+	private String currentlyWritingDirectoryName = null;
 	
 	/**
 	 * start reading the training portion of the set of lattices corresponding 
@@ -476,6 +557,27 @@ public class Corpus {
 	public void switchToTrain(int partition, int level) throws IOException {
 //		if (currentlyReadingType!= null)  // TODO: should this be here?
 //			throw new RuntimeException("I seem to be in the middle of something!");
+		
+		if (useRandomAccess) {
+			if (latticeCacheDirectory == null)
+				latticeCacheDirectory = new int[numJackKnives][];
+			if (randomTrainSetAccess == null)
+				randomTrainSetAccess = new RandomAccessFile[numJackKnives];
+
+			if (currentlyReadingLevel != level) { // need to update all things
+				for (int i = 0; i < numJackKnives; i++) {
+					System.out.printf("Loading directory for partition %s, level %d\n", partitionNames[i], level);
+
+					DataInputStream in = new DataInputStream(new FileInputStream(getFnameFor(i, level) + "-directory"));
+					latticeCacheDirectory[i] = ArrayUtil.readIntArray(in);
+					in.close();
+
+					randomTrainSetAccess[i] = new RandomAccessFile(getFnameFor(i, level), "r");
+				}
+			}
+		}
+
+
 		currentlyReadingType = TrainDevTest.Train;
 		latticeCacheInPartition = partition==0 ? 1 : 0;
 		latticeCacheIn = getInputStream(getFnameFor(latticeCacheInPartition, level));
@@ -483,6 +585,7 @@ public class Corpus {
 		currentlyReadingLevel = level;
 		currentlyReadingSeqIndex = 0;
 		currentlyReadingLatticeIndex = 0;
+			
 	}
 	
 	/**
@@ -585,7 +688,41 @@ public class Corpus {
 		return testLattice[latticeCacheInPartition][currentlyReadingLatticeIndex++];
 	}
 	
-	public Lattice nextLattice() throws IOException, ClassNotFoundException{
+	public Lattice readRandomTrainLattice() throws IOException, ClassNotFoundException {
+		
+		int inPartition = random.nextInt(numJackKnives);
+		if (inPartition == currentlyReadingPartition) latticeCacheInPartition ++;
+
+//		System.out.println("Randomly chose partition = " + partitionNames[inPartition]);
+
+
+		int [] directory = latticeCacheDirectory[inPartition];
+		
+		int latticeNum = random.nextInt(directory.length-1);
+		
+		int offset = directory[latticeNum];
+//		System.out.printf("Reading lattice #%d, offset=%d / %d length\n", latticeNum, directory[latticeNum], 
+//				randomTrainSetAccess[inPartition].length());
+//		
+		
+		randomTrainSetAccess[inPartition].seek(directory[latticeNum]);
+		Lattice lattice = Lattice.readLattice(randomTrainSetAccess[inPartition]);
+		Sequence seq = randomSeqAccess.get(lattice.seqHash);
+		lattice.seq = seq;
+//		System.out.printf("Read lattice with seqhash %d == sequence #%d\n", lattice.seqHash, seq.id);
+		
+		currentlyReadingSeqIndex++;
+		
+		return lattice;
+		
+	}
+	public Lattice nextLattice() throws IOException, ClassNotFoundException { 
+		return nextLattice(true);
+	}
+	public Lattice nextLattice(boolean allowRandom) throws IOException, ClassNotFoundException{
+		
+		if (useRandomAccess && currentlyReadingType == TrainDevTest.Train && allowRandom)
+			return readRandomTrainLattice();
 		
 //		if (currentlyReadingLevel == 0 && this.storeBaseLatticesInRAM)
 //			return nextLocalLattice();
@@ -649,7 +786,7 @@ public class Corpus {
 			base = new BufferedInputStream(streamsBuffer.get(fname).getInputStream());
 		else
 			base = new BufferedInputStream(new FileInputStream(fname));
-			
+				
 		if (useCompression)
 			base = new GZIPInputStream(base);
 		
@@ -681,8 +818,10 @@ public class Corpus {
 
 		return new DataOutputStream(base);
 	}
-	
 
+	public String getTrainFile() {
+		return src+"_train.txt";
+	}
 	
 
 //	@Override

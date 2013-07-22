@@ -63,10 +63,9 @@ public class ZeroOrderPOS extends ZeroOrderModel implements Externalizable {
 		Corpus c = opts.corpus;
 		POSAlphabet = new Alphabet();
 		featureAlphabet = new Alphabet();
-
-		if (featureGen == null)
-			featureGen = new ZeroOrderPOSFeatures();
 		
+		featureGen.init(opts);
+		featureGen.setWorkingAlphabet(featureAlphabet);
 		featureGen.setComputeOnly(true);
 
 		System.out.println("computing features on " + c.train[c.train.length-1].length + " examples");

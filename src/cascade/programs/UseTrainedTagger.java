@@ -101,9 +101,13 @@ public class UseTrainedTagger {
 		}
 		
 		// evaluate on each test sequence
+		
 		int correct = 0;
 		int total = 0;
+		double totalTime = 0;
+		
 		for (int instId = 0; instId < testSequences.length; instId++) {
+			long startTime = System.nanoTime();
 			Sequence seq = testSequences[instId];
 			int[] result = decode(seq, models, weights, alpha, genstats);
 			writeInstance(out, seq.getInstance(), result, alphabet);
@@ -114,6 +118,7 @@ public class UseTrainedTagger {
 				}
 				total++;
 			}
+			totalTime += (double)(System.nanoTime() - startTime)/1e6;
 		}
 		
 		for (int i = 0; i < genstats.length; i++){
@@ -122,6 +127,7 @@ public class UseTrainedTagger {
 			System.out.println(genstats[i].summarize());
 		}
 		System.out.println("Test set Accuracy: " + (correct*100.0/total));
+		System.out.printf("Average CPU time per word: %.2f ms", totalTime/testSequences.length );
 		out.close();
 	}
 	

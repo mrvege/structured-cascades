@@ -30,8 +30,8 @@ public class ViterbiMaxSum extends Viterbi {
 					double val = lattice.edgeScores[edgeIdx];
 					//System.out.printf("%d: val = %g\n", idx, val);
 
-					if (lattice.stateScores != null)
-						val += lattice.stateScores[idx];					
+//					if (lattice.stateScores != null)
+//						val += lattice.stateScores[idx];					
 
 					//System.out.printf("%d: val = %g\n", idx, val);
 					// if not the start state, accumulate value in alpha table
@@ -81,7 +81,7 @@ public class ViterbiMaxSum extends Viterbi {
 					double val = lattice.edgeScores[edgeIdx];
 					
 					if (rightIdx != Lattice.NULL_IDX)
-						val += betaVals[rightIdx] + (lattice.stateScores != null ? lattice.stateScores[rightIdx] : 0);
+						val += betaVals[rightIdx]; // + (lattice.stateScores != null ? lattice.stateScores[rightIdx] : 0);
 					
 					if (val > max) {
 						argmax = edgeIdx;
@@ -114,8 +114,8 @@ public class ViterbiMaxSum extends Viterbi {
 			if (leftIdx != Lattice.NULL_IDX)
 				val += alphaVals[leftIdx];
 			if (rightIdx != Lattice.NULL_IDX) 
-				val += betaVals[rightIdx] +
-				(lattice.stateScores != null ? lattice.stateScores[rightIdx] : 0);
+				val += betaVals[rightIdx];
+				//(lattice.stateScores != null ? lattice.stateScores[rightIdx] : 0);
 			
 			
 			val += lattice.edgeScores[idx];
