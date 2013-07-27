@@ -38,6 +38,11 @@ public abstract class NOrderModel extends CascadeModel {
 	public double[] marginalVals;
 	
 	/**
+	 * Whether or not to add hamming loss to scores for loss augmented inference.
+	 */
+	public boolean addHammingLoss = false;
+	
+	/**
 	 * The Markov order of the model. Note that in "n-gram" notation, order is n-1: 
 	 * a FIRST order model (order=1) is a BI-GRAM or 2-gram. 
 	 * A SECOND order model is a TRI-GRAM or 3-gram model. And so forth.

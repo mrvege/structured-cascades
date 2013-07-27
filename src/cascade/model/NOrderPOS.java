@@ -746,6 +746,10 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 		
 		int N = getConditionalFeatureOffset();
 		
+		int[] truth = null;
+		if (addHammingLoss)
+			truth = getTruth(lattice.seq);
+		
 		for (int pos = 0; pos < lattice.length(); pos++){
 			
 			int start = lattice.getStateOffset(pos);
@@ -763,6 +767,9 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 
 				if (lattice.fvState != null)
 					lattice.stateScores[idx] += w.score(lattice.fvState[idx], N);
+								
+				if (this.addHammingLoss && truth[pos] != state)
+					lattice.stateScores[idx]++;
 			}
 		}
 	}	
