@@ -195,7 +195,7 @@ public class TrainTagger {
 			options.println(2,"Peformance:");
 			options.println(2,genstats.summarize());
 
-			if ( genstats.avgError < minError) {
+			if ( true) { // genstats.avgError < minError) {
 				options.println(2,"** Best weights so far **");
 				bestw = w.getCopy();
 				bestEpoch = t;

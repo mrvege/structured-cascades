@@ -128,7 +128,7 @@ cascade.model.FirstOrderPOS m2 {
 	trainingAlphas = [0.0, 0.25, 0.5];
 
 	update = cascade.learn.NOrderSCP p {};
-	featureGen = cascade.features.NGramFeatures f {};
+	featureGen = cascade.features.OCRFeatures f {};
 }
 
 /* Note that once we use NOrderPOS model, we MUST specify 
@@ -141,7 +141,7 @@ cascade.model.NOrderPOS m3 {
 
 	trainingAlphas = [0.0, 0.25, 0.5];
 
-	featureGen = cascade.features.NGramFeatures f {};
+	featureGen = cascade.features.OCRFeatures f {};
 	update = cascade.learn.NOrderSCP p {};
 }
 
@@ -155,8 +155,8 @@ cascade.model.NOrderPOS m4 {
 
 	trainingAlphas = [0.0];
 
-	featureGen = cascade.features.NGramFeatures f {};
-	update = cascade.learn.NOrderPerceptron p {};
+	featureGen = cascade.features.OCRFeatures f {};
+	update = cascade.learn.NOrderSSG p { learnRate = 0.1; };
 }
 
 
