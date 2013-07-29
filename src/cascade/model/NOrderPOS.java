@@ -318,8 +318,9 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 		featureAlphabet = new Alphabet();
 
 		// precompute the feature set 
-		precomputeFeatures();			
-		featureAlphabet.stopGrowth();
+		precomputeFeatures();
+		if (useSupportedFeaturesOnly)
+			featureAlphabet.stopGrowth();
 
 		System.out.println("Number of possible tags pre-computed: " + POSAlphabet.size() + " = " + pow(order+1) + " grams");
 	}
@@ -931,11 +932,15 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 	}
 	
 	@Override
-	public String toString() {
-		return order + " Order POS Model: " + POSAlphabet.size() + 
-		" tags, " + getNumberOfFeatures() + 
-		" features " + (usePositionFeatures ? ("," + pow(order+1) + " grams, " + featureAlphabet.size() + " positional features (" + 
-		pow(order+1)*featureAlphabet.size() + " possible)") : "") + " ";
+	public String toString() {			
+		return order + " Order POS Model: " + POSAlphabet.size() + " tags, " + 
+		String.format("%d pos features (%d total), ", numPositionFeatures, numPositionFeatures*stateAlphabet.size()) +
+		String.format("%d state+edge features (offset=%d), ", featureAlphabet.size()-numPositionFeatures, getConditionalFeatureOffset()) +
+		String.format("%s total", new DecimalFormat().format(getNumberOfFeatures()));
+		
+//		+ getNumberOfFeatures() + 
+//		" features" + (usePositionFeatures ? ("," + pow(order+1) + " grams, " + featureAlphabet.size() + " positional features (" + 
+//		pow(order+1)*featureAlphabet.size() + " possible)") : "") + " ";
 	}
 
 	public void precomputeFeatures() {
@@ -985,6 +990,10 @@ public class NOrderPOS extends NOrderModel implements Externalizable {
 		margRightString = "margRight_o" + order;
 		featureGen.addAllQuintileFeatures(margLeftString, margRightString);	
 		featureGen.setComputeOnly(false);
+
+//		for (int i = 0; i < featureAlphabet.size(); i++) {
+//			System.out.printf("feature %d: %s\n", i, featureAlphabet.reverseLookup(i));
+//		}
 		
 		System.out.println("Number of features pre-computed: ");
 		System.out.printf("\t%d pos features (%d total)\n", numPositionFeatures, numPositionFeatures*stateAlphabet.size());

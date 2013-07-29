@@ -62,6 +62,11 @@ public abstract class CascadeModel  {
 	 */
 	public double maxerr = 0.5;
 	
+	/**
+	 *  Maximum acceptable alpha threshold
+	 */
+	public double maxalpha = 1.0;
+	
 	public CascadeModel() {}
 	
 	/**

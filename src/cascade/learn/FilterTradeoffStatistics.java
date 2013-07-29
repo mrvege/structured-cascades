@@ -38,8 +38,10 @@ public class FilterTradeoffStatistics {
 	public FilterTradeoffStatistics() {
 	
 		alphas = new double[201];
+		double step = 2.0/((double)alphas.length);
+		
 		for (int i = 0; i < alphas.length; i++)
-			alphas[i] = (double) i * (1.0 / (alphas.length - 1));
+			alphas[i] = -1.0 + ((double)i)*step; //(double) i * (1.0 / (alphas.length - 1));
 		
 		effs = new double[alphas.length];
 		errs = new double[alphas.length];

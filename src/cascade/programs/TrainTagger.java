@@ -97,9 +97,17 @@ public class TrainTagger {
 					w = new ModelWeights(alpha, we, -1);
 					win.close();
 				}
-					
+				
+				
+				
+
+				String beforestr =  models[level+1].toString();
 				boolean isFullPartition = (partition == partitions.length-1);
 				computeLatticesForNextLevel(options, models, level, partition, isFullPartition, w);
+
+				options.println(0, "Next model before/after lattice computation:");
+				options.println(0, "\tbefore: " + beforestr);
+				options.println(0, "\tafter: " + models[level+1].toString());
 			}
 
 			// last step: save the the next model, which was used to generate the features for the next level, 
@@ -165,7 +173,7 @@ public class TrainTagger {
 			}
 			elapsed /= 1e9; // convert nanoseconds to seconds
 
-			options.println(1,"Finished training: " + mistakes + " updates");
+			options.println(1,"Finished training: " + t + "/" + options.trainEpochs + ";" + mistakes + " updates");
 			options.print(2, String.format("Total train CPU time discounting I/O: %g s = %g iter/s\n",
 					elapsed, (double)corpus.train[partition].length/elapsed));
 
@@ -243,10 +251,10 @@ public class TrainTagger {
 		options.print(2, String.format("Total CPU time discounting I/O: %g s = %g iter/s\n",
 				elapsed, (double)corpus.test[partition].length/elapsed));
 		
-		options.println(0,"** TEST Peformance: **");
+		options.print(0,"** TEST Peformance: **");
 
 		// Compute test statistics / efficiency vs. accuracy trade-off and log to file
-		options.println(0,genstats.summarize(false));
+		options.println(0,genstats.summarize());
 
 		String logstr = bestEpoch + ",-1,-1," + ArrayUtil.joinDoubleFields(genstats, GeneralizationStatistics.writeFields);
 		trainingProgress.println(logstr);
@@ -276,7 +284,7 @@ public class TrainTagger {
 		AveragingWeights w = new AveragingWeights(model.getNumberOfFeatures());
 		Weights bestw = null;
 
-		double bestalpha = -1;
+		double bestalpha = -2;
 		int bestEpoch = -1;
 
 		int avgDenominator = 0;
@@ -350,7 +358,7 @@ public class TrainTagger {
 				tradeoff.average();
 				genstats.average();
 
-				tradeoff.findBestAlpha(model.maxerr, 1.0); //alpha.doubleValue());
+				tradeoff.findBestAlpha(model.maxerr, model.maxalpha); //alpha.doubleValue());
 
 				String logstr = t + "," + mistakes + "," + wNorm + "," 
 				+ ArrayUtil.joinDoubleFields(genstats, GeneralizationStatistics.writeFields) + ","
@@ -386,15 +394,15 @@ public class TrainTagger {
 			}
 		}
 
-		if (bestalpha == -1)
+		if (bestalpha == -2)
 			throw new RuntimeException("Alpha was never chosen!!");
 
 		
-		if (options.verbosity > 0) {
-			options.println(1,"** DEVEL SET Performance: (best epoch = " + bestEpoch + ")");
-			options.println(1,"Trade-off Optimization:" + bestTradeoff.summarize());
+//		if (options.verbosity > 0) {
+			options.println(0,"** DEVEL SET Performance: (best epoch = " + bestEpoch + ")");
+			options.println(0,"Trade-off Optimization:" + bestTradeoff.summarize());
 			options.println(1,"Best Epoch Peformance:" + bestGenstats.summarize());
-		}
+//		}
 		
 		// save model weights
 		String wfname = corpus.getPartitionFilePrefix(partition, level) + "-weights";
@@ -464,7 +472,7 @@ public class TrainTagger {
 
 		if (isFullPartition) {
 
-			options.println(0,"** TEST Peformance: **");
+			options.print(0,"** TEST Peformance: **");
 
 			// Compute test statistics / efficiency vs. accuracy trade-off and log to file
 			tradeoff.average(); genstats.average();
