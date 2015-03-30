@@ -1,0 +1,167 @@
+# Configuration File Tutorial #
+
+Below is the file `ocr_example.fig` that's included with the package:
+
+Please see the comments for how to use these files. A real Wiki page will be coming soon.
+```
+/* 
+   This is an example configuration file for running OCR dataset.
+   
+   The parser supports a limited set of natural Java commands
+   to instantiate Java objects using reflection. This is the most
+   direct way of configuring the multiple levels of the cascade
+   and keeping parameters organized that we could think of.
+   
+   Some important caveats:
+
+   	1. Numbers are considered Integers unless
+	   a floating point period is detected. Thus if a given property 
+	   is of type double, you cannot use "0" or "1" to instantiate it
+	   or an error will occur.
+
+	2. Strings use double quotes, single quotes are not meaningful.
+
+	3. Objects can be nested BUT each object needs an identifier.
+
+	4. Multi-line comments are the only comments supported.
+
+	5. Specify arrays using [...,...] notation. I have not tested
+	   nesting objects within arrays, but you can refer to already
+	   created objects by using $Id notation, where $Id is the 
+	   unique identifier given to that object.
+
+   To run this example make sure the OCR data is in a subdirectory called "data". Then
+   invoke as follows: (assuming you have the external dependencies already on your classpath.)   
+   
+   > java -jar sc_tagger.jar ocr_example.fig fold0
+
+   This will run the cascade described below on the first cross-validation
+   fold and put all output in a sub-directory "out-fold0".
+
+*/
+
+/* ----------------------------------------------------------*/
+
+/* The first object MUST be an Options object to define 
+   global settings for running the program. */
+
+cascade.programs.Options o {
+
+	/* set medium level of program output */
+	verbosity = 1;
+
+	/* set a Corpus object to define dataset settings */
+	corpus = cascade.io.Corpus c {
+
+	    /* Location of the data files */
+		src = "data/ocr_";
+
+		/* Location where output should be saved */
+		prefix = "out-";
+
+		/* use 3 partitions for jacknifing */
+		numJackKnives = 3;
+
+		/* set aside 10% of training set for development */
+		develFraction = 0.1;
+
+		/* write to disk without compression: */		
+		writeToRAM = false;
+		useCompression = false;
+	};
+
+	/* force generation of 0-order lattices */
+	alwaysPrecomputeFirst = false;
+
+	/* use 2 epochs for training (increase for increased
+	accuracy, but slower runtime) */
+	trainEpochs = 2;
+
+	/* set random set for reproducibility */
+	seed = 12345;
+}
+
+/* ----------------------------------------------------------*/
+
+/* 
+
+   Now we initialize each of the models, going from zero-order 
+   (mult-class) up to third-order (quad-gram) models. 
+
+   There are four options you should set when initializing a model or 
+   errors may occur: maxerr, trainingAlphas, update, and featureGen. See below
+   for information on what each of these settings does.
+
+   Note that only certain models may be paired with certain UpdateRule or
+   FeatureGenerator objects or strange behavior may occur: a safe rule of
+   thumb is to make pair ZeroOrderXXXX objects with ZeroOrderXXXX objects only.
+
+*/
+
+/* ----------------------------------------------------------*/
+
+cascade.model.ZeroOrderPOS m1 {
+
+        /* Sets the maximum amount of additional filtering error we will incur
+	   on this level */
+	maxerr = 0.5;
+
+	/* Set the range of alphas to be tried when learning the filter.
+	   The most efficient filter under the maxerr threshold will 
+	   be automatically chosen. */
+	trainingAlphas = [0.0, 0.25, 0.5];
+
+	/* Set the update rule to the appropriate filter learning rule.*/
+	update = cascade.learn.ZeroOrderSCP p {};
+
+	/* Because the pixels are encoded as a word, we need a special
+	   feature generation function that generates features for 
+	   individual pixels in order to run OCR. */
+	featureGen = cascade.features.OCRFeatures f {};
+}
+
+/* For the next models, we allow for a few more errors
+   since errors are now measured on edges, which double-counts state-based
+   errors. Also, we use NGramFeatures so that the only features used
+   are marginals from the previous model and one feature for each 
+   combination of letters, and we use NOrderSCP instead of ZeroOrderSCP	
+   to use the structured inference procedures instead of multi-class. */
+
+cascade.model.FirstOrderPOS m2 {
+	maxerr = 1.0;
+
+	trainingAlphas = [0.0, 0.25, 0.5];
+
+	update = cascade.learn.NOrderSCP p {};
+	featureGen = cascade.features.NGramFeatures f {};
+}
+
+/* Note that once we use NOrderPOS model, we MUST specify 
+   the order of the model, since it is not defined as part
+   of the class. */
+
+cascade.model.NOrderPOS m3 {
+	maxerr = 2.0;
+	order = 2;
+
+	trainingAlphas = [0.0, 0.25, 0.5];
+
+	featureGen = cascade.features.NGramFeatures f {};
+	update = cascade.learn.NOrderSCP p {};
+}
+
+/* For the final model, we do NOT use the structured cascade
+   filtering update rule, but instead use a regular structured
+   perceptron for classification. traininAlphas will be ignored
+   for this model, but we set it to [0.0] to make sure. */
+
+cascade.model.NOrderPOS m4 {
+	order = 3;
+
+	trainingAlphas = [0.0];
+
+	featureGen = cascade.features.NGramFeatures f {};
+	update = cascade.learn.NOrderPerceptron p {};
+}
+
+```
